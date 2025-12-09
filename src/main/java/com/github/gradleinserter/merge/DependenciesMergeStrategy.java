@@ -1,7 +1,6 @@
 package com.github.gradleinserter.merge;
 
 import com.github.gradleinserter.api.IInsertionEdit;
-import com.github.gradleinserter.api.InsertEdit;
 import com.github.gradleinserter.api.ReplaceEdit;
 import com.github.gradleinserter.ir.BlockNode;
 import com.github.gradleinserter.view.DependenciesView;
@@ -35,7 +34,7 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
             // No dependencies block in original - need to create one
             String newBlock = generateDependenciesBlock(snippet, context);
             int insertPos = context.getNewBlockInsertionPoint();
-            edits.add(new InsertEdit(insertPos, "\n" + newBlock,
+            edits.add(new ReplaceEdit(insertPos, insertPos, "\n" + newBlock,
                     "Add dependencies block"));
             return edits;
         }
@@ -50,7 +49,7 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
                 // New dependency - add it
                 String newLine = formatDependencyLine(snippetDep, context);
                 int insertPos = originalBlock.getBodyEndOffset();
-                edits.add(new InsertEdit(insertPos, newLine,
+                edits.add(new ReplaceEdit(insertPos, insertPos, newLine,
                         "Add dependency: " + snippetDep.getFullCoordinate()));
             } else {
                 // Update existing dependencies with new version
@@ -110,8 +109,9 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
 
     private String formatDependencyLine(DependencyItem dep, MergeContext context) {
         StringBuilder sb = new StringBuilder();
-        sb.append("\n").append(context.getIndentation());
+        sb.append(context.getIndentation());
         sb.append(dep.getConfiguration()).append(" '").append(dep.getFullCoordinate()).append("'");
+        sb.append("\n");
         return sb.toString();
     }
 

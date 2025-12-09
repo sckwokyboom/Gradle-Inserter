@@ -81,7 +81,19 @@ public final class GradleInserter {
         }
 
         // Sort edits by offset (descending) so they can be applied from end to start
-        allEdits.sort(Comparator.comparingInt(IInsertionEdit::getStartOffset).reversed());
+        // When offsets are equal, maintain original order (stable sort with index)
+        List<IndexedEdit> indexed = new ArrayList<>();
+        for (int i = 0; i < allEdits.size(); i++) {
+            indexed.add(new IndexedEdit(allEdits.get(i), i));
+        }
+        indexed.sort(Comparator
+                .comparingInt((IndexedEdit e) -> e.edit.getStartOffset()).reversed()
+                .thenComparingInt(e -> -e.index)); // Later additions first at same position
+
+        allEdits.clear();
+        for (IndexedEdit ie : indexed) {
+            allEdits.add(ie.edit);
+        }
 
         return allEdits;
     }
@@ -150,6 +162,19 @@ public final class GradleInserter {
         }
 
         return Collections.emptyList();
+    }
+
+    /**
+     * Helper class for stable sorting of edits.
+     */
+    private static final class IndexedEdit {
+        final IInsertionEdit edit;
+        final int index;
+
+        IndexedEdit(IInsertionEdit edit, int index) {
+            this.edit = edit;
+            this.index = index;
+        }
     }
 
     /**

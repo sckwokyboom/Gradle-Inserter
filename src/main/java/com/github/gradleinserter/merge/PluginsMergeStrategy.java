@@ -1,7 +1,6 @@
 package com.github.gradleinserter.merge;
 
 import com.github.gradleinserter.api.IInsertionEdit;
-import com.github.gradleinserter.api.InsertEdit;
 import com.github.gradleinserter.api.ReplaceEdit;
 import com.github.gradleinserter.ir.BlockNode;
 import com.github.gradleinserter.view.PluginItem;
@@ -36,7 +35,7 @@ public class PluginsMergeStrategy implements MergeStrategy<PluginsView> {
             // No plugins block in original - need to create one at the start
             String newBlock = generatePluginsBlock(snippet, context);
             // Plugins block should be at the beginning of the file
-            edits.add(new InsertEdit(0, newBlock + "\n\n",
+            edits.add(new ReplaceEdit(0, 0, newBlock + "\n\n",
                     "Add plugins block"));
             return edits;
         }
@@ -51,7 +50,7 @@ public class PluginsMergeStrategy implements MergeStrategy<PluginsView> {
                 // New plugin - add it
                 String newLine = formatPluginLine(snippetPlugin, context);
                 int insertPos = originalBlock.getBodyEndOffset();
-                edits.add(new InsertEdit(insertPos, newLine,
+                edits.add(new ReplaceEdit(insertPos, insertPos, newLine,
                         "Add plugin: " + snippetPlugin.getId()));
             } else {
                 // Update existing plugin version if needed
@@ -104,7 +103,7 @@ public class PluginsMergeStrategy implements MergeStrategy<PluginsView> {
             // Insert " version 'x.y.z'" after the id declaration
             int endPos = existing.getSourceNode().getEndOffset();
             String versionSuffix = " version '" + newVersion + "'";
-            return new InsertEdit(endPos, versionSuffix,
+            return new ReplaceEdit(endPos, endPos, versionSuffix,
                     "Add version to plugin: " + existing.getId());
         }
 
@@ -113,7 +112,7 @@ public class PluginsMergeStrategy implements MergeStrategy<PluginsView> {
 
     private String formatPluginLine(PluginItem plugin, MergeContext context) {
         StringBuilder sb = new StringBuilder();
-        sb.append("\n").append(context.getIndentation());
+        sb.append(context.getIndentation());
         sb.append("id '").append(plugin.getId()).append("'");
         if (plugin.getVersion() != null) {
             sb.append(" version '").append(plugin.getVersion()).append("'");
@@ -121,6 +120,7 @@ public class PluginsMergeStrategy implements MergeStrategy<PluginsView> {
         if (!plugin.isApply()) {
             sb.append(" apply false");
         }
+        sb.append("\n");
         return sb.toString();
     }
 

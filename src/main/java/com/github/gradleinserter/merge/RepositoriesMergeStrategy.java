@@ -1,7 +1,7 @@
 package com.github.gradleinserter.merge;
 
 import com.github.gradleinserter.api.IInsertionEdit;
-import com.github.gradleinserter.api.InsertEdit;
+import com.github.gradleinserter.api.ReplaceEdit;
 import com.github.gradleinserter.ir.BlockNode;
 import com.github.gradleinserter.view.RepositoriesView;
 import com.github.gradleinserter.view.RepositoriesView.RepositoryItem;
@@ -34,7 +34,7 @@ public class RepositoriesMergeStrategy implements MergeStrategy<RepositoriesView
             String newBlock = generateRepositoriesBlock(snippet, context);
             // Repositories typically come after plugins
             int insertPos = findRepositoriesInsertionPoint(context);
-            edits.add(new InsertEdit(insertPos, "\n" + newBlock + "\n",
+            edits.add(new ReplaceEdit(insertPos, insertPos, "\n" + newBlock + "\n",
                     "Add repositories block"));
             return edits;
         }
@@ -46,7 +46,7 @@ public class RepositoriesMergeStrategy implements MergeStrategy<RepositoriesView
             if (!original.containsRepository(snippetRepo.getName())) {
                 String newLine = formatRepositoryLine(snippetRepo, context);
                 int insertPos = originalBlock.getBodyEndOffset();
-                edits.add(new InsertEdit(insertPos, newLine,
+                edits.add(new ReplaceEdit(insertPos, insertPos, newLine,
                         "Add repository: " + snippetRepo.getName()));
             }
         }
@@ -65,7 +65,7 @@ public class RepositoriesMergeStrategy implements MergeStrategy<RepositoriesView
 
     private String formatRepositoryLine(RepositoryItem repo, MergeContext context) {
         StringBuilder sb = new StringBuilder();
-        sb.append("\n").append(context.getIndentation());
+        sb.append(context.getIndentation());
 
         if (repo.getUrl() != null) {
             sb.append("maven { url '").append(repo.getUrl()).append("' }");
@@ -73,6 +73,7 @@ public class RepositoriesMergeStrategy implements MergeStrategy<RepositoriesView
             sb.append(repo.getName()).append("()");
         }
 
+        sb.append("\n");
         return sb.toString();
     }
 

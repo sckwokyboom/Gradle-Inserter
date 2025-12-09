@@ -124,34 +124,19 @@ public class GroovyScriptParser implements ScriptParser {
         }
 
         Expression arguments = mce.getArguments();
+        List<Expression> exprs = extractExpressionList(arguments);
 
-        // Check if this is a block call (method with closure argument)
-        if (arguments instanceof ArgumentListExpression) {
-            ArgumentListExpression argList = (ArgumentListExpression) arguments;
-            List<Expression> exprs = argList.getExpressions();
-
-            // Check for closure argument (block)
-            if (!exprs.isEmpty() && exprs.get(exprs.size() - 1) instanceof ClosureExpression) {
-                ClosureExpression closure = (ClosureExpression) exprs.get(exprs.size() - 1);
-                return convertBlock(methodName, mce, closure, source);
-            }
-
-            // Regular method call with arguments
-            List<String> args = extractArguments(argList);
-            return new MethodCallNode(
-                    methodName,
-                    args,
-                    null,
-                    getStartOffset(mce, source),
-                    getEndOffset(mce, source),
-                    extractSourceText(mce, source)
-            );
+        // Check for closure argument (block)
+        if (!exprs.isEmpty() && exprs.get(exprs.size() - 1) instanceof ClosureExpression) {
+            ClosureExpression closure = (ClosureExpression) exprs.get(exprs.size() - 1);
+            return convertBlock(methodName, mce, closure, source);
         }
 
-        // Method call without arguments
+        // Regular method call with arguments
+        List<String> args = extractArgumentsFromExpressions(exprs);
         return new MethodCallNode(
                 methodName,
-                Collections.emptyList(),
+                args,
                 null,
                 getStartOffset(mce, source),
                 getEndOffset(mce, source),
@@ -159,12 +144,36 @@ public class GroovyScriptParser implements ScriptParser {
         );
     }
 
-    private List<String> extractArgumentsFromChainedCall(MethodCallExpression mce) {
-        Expression arguments = mce.getArguments();
+    private List<Expression> extractExpressionList(Expression arguments) {
         if (arguments instanceof ArgumentListExpression) {
-            return extractArguments((ArgumentListExpression) arguments);
+            return ((ArgumentListExpression) arguments).getExpressions();
+        }
+        if (arguments instanceof TupleExpression) {
+            return ((TupleExpression) arguments).getExpressions();
+        }
+        if (arguments != null) {
+            return Collections.singletonList(arguments);
         }
         return Collections.emptyList();
+    }
+
+    private List<String> extractArgumentsFromExpressions(List<Expression> exprs) {
+        List<String> args = new ArrayList<>();
+        for (Expression expr : exprs) {
+            if (!(expr instanceof ClosureExpression)) {
+                String argValue = extractArgumentValue(expr);
+                if (argValue != null && !argValue.isEmpty()) {
+                    args.add(argValue);
+                }
+            }
+        }
+        return args;
+    }
+
+    private List<String> extractArgumentsFromChainedCall(MethodCallExpression mce) {
+        Expression arguments = mce.getArguments();
+        List<Expression> exprs = extractExpressionList(arguments);
+        return extractArgumentsFromExpressions(exprs);
     }
 
     private String extractSourceText(int startLine, int startCol, int endLine, int endCol, String source) {
@@ -231,16 +240,6 @@ public class GroovyScriptParser implements ScriptParser {
             return ((ConstantExpression) method).getText();
         }
         return method.getText();
-    }
-
-    private List<String> extractArguments(ArgumentListExpression argList) {
-        List<String> args = new ArrayList<>();
-        for (Expression expr : argList.getExpressions()) {
-            if (!(expr instanceof ClosureExpression)) {
-                args.add(extractArgumentValue(expr));
-            }
-        }
-        return args;
     }
 
     private String extractArgumentValue(Expression expr) {

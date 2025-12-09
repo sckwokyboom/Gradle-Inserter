@@ -1,7 +1,7 @@
 package com.github.gradleinserter.merge;
 
 import com.github.gradleinserter.api.IInsertionEdit;
-import com.github.gradleinserter.api.InsertEdit;
+import com.github.gradleinserter.api.ReplaceEdit;
 import com.github.gradleinserter.view.RawView;
 import com.github.gradleinserter.view.SemanticView;
 
@@ -30,7 +30,7 @@ public class RawContentMergeStrategy implements MergeStrategy<RawView> {
         String content = snippet.getContent().trim();
         if (!content.isEmpty()) {
             int insertPos = context.getNewBlockInsertionPoint();
-            edits.add(new InsertEdit(insertPos, "\n" + content,
+            edits.add(new ReplaceEdit(insertPos, insertPos, "\n" + content,
                     "Add raw content"));
         }
 

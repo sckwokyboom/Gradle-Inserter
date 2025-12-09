@@ -1,7 +1,6 @@
 package com.github.gradleinserter.merge;
 
 import com.github.gradleinserter.api.IInsertionEdit;
-import com.github.gradleinserter.api.InsertEdit;
 import com.github.gradleinserter.api.ReplaceEdit;
 import com.github.gradleinserter.ir.BlockNode;
 import com.github.gradleinserter.ir.IRNode;
@@ -34,7 +33,7 @@ public class UnknownBlockMergeStrategy implements MergeStrategy<UnknownBlockView
             // Block doesn't exist - add it
             String newBlock = snippet.getBlockNode().getSourceText();
             int insertPos = context.getNewBlockInsertionPoint();
-            edits.add(new InsertEdit(insertPos, "\n" + newBlock,
+            edits.add(new ReplaceEdit(insertPos, insertPos, "\n" + newBlock,
                     "Add block: " + snippet.getBlockName()));
             return edits;
         }
@@ -47,7 +46,7 @@ public class UnknownBlockMergeStrategy implements MergeStrategy<UnknownBlockView
         String snippetContent = extractBodyContent(snippetBlock, context);
         if (!snippetContent.trim().isEmpty()) {
             int insertPos = originalBlock.getBodyEndOffset();
-            edits.add(new InsertEdit(insertPos, snippetContent,
+            edits.add(new ReplaceEdit(insertPos, insertPos, snippetContent,
                     "Append to block: " + snippet.getBlockName()));
         }
 
@@ -57,8 +56,9 @@ public class UnknownBlockMergeStrategy implements MergeStrategy<UnknownBlockView
     private String extractBodyContent(BlockNode block, MergeContext context) {
         StringBuilder sb = new StringBuilder();
         for (IRNode child : block.getChildren()) {
-            sb.append("\n").append(context.getIndentation());
+            sb.append(context.getIndentation());
             sb.append(child.getSourceText().trim());
+            sb.append("\n");
         }
         return sb.toString();
     }
