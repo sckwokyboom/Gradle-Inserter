@@ -6,6 +6,8 @@ import com.github.gradleinserter.ir.BlockNode;
 import com.github.gradleinserter.view.DependenciesView;
 import com.github.gradleinserter.view.DependencyItem;
 import com.github.gradleinserter.view.SemanticView;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,14 +22,16 @@ import java.util.List;
  */
 public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView> {
 
+    @NotNull
     @Override
     public SemanticView.ViewType getViewType() {
         return SemanticView.ViewType.DEPENDENCIES;
     }
 
+    @NotNull
     @Override
-    public List<IInsertionEdit> merge(DependenciesView original, DependenciesView snippet,
-                                      String originalSource, MergeContext context) {
+    public List<IInsertionEdit> merge(@Nullable DependenciesView original, @NotNull DependenciesView snippet,
+                                      @NotNull String originalSource, @NotNull MergeContext context) {
         List<IInsertionEdit> edits = new ArrayList<>();
 
         if (original == null || original.getBlockNode() == null) {
@@ -67,7 +71,7 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
         return edits;
     }
 
-    private boolean needsVersionUpdate(DependencyItem existing, DependencyItem snippet) {
+    private boolean needsVersionUpdate(@NotNull DependencyItem existing, @NotNull DependencyItem snippet) {
         String existingVersion = existing.getVersion();
         String snippetVersion = snippet.getVersion();
 
@@ -78,9 +82,10 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
         return !snippetVersion.equals(existingVersion);
     }
 
-    private IInsertionEdit createVersionUpdateEdit(DependencyItem existing,
-                                                    DependencyItem snippet,
-                                                    String originalSource) {
+    @Nullable
+    private IInsertionEdit createVersionUpdateEdit(@NotNull DependencyItem existing,
+                                                    @NotNull DependencyItem snippet,
+                                                    @NotNull String originalSource) {
         if (existing.getSourceNode() == null) {
             return null;
         }
@@ -107,7 +112,8 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
         return null;
     }
 
-    private String formatDependencyLine(DependencyItem dep, MergeContext context) {
+    @NotNull
+    private String formatDependencyLine(@NotNull DependencyItem dep, @NotNull MergeContext context) {
         StringBuilder sb = new StringBuilder();
         sb.append(context.getIndentation());
         sb.append(dep.getConfiguration()).append(" '").append(dep.getFullCoordinate()).append("'");
@@ -115,7 +121,8 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
         return sb.toString();
     }
 
-    private String generateDependenciesBlock(DependenciesView snippet, MergeContext context) {
+    @NotNull
+    private String generateDependenciesBlock(@NotNull DependenciesView snippet, @NotNull MergeContext context) {
         StringBuilder sb = new StringBuilder();
         sb.append("dependencies {");
 

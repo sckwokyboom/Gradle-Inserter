@@ -1,6 +1,8 @@
 package com.github.gradleinserter.view;
 
 import com.github.gradleinserter.ir.MethodCallNode;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.regex.Matcher;
@@ -16,17 +18,24 @@ public final class DependencyItem {
     private static final Pattern COORDINATE_PATTERN =
             Pattern.compile("([^:]+):([^:]+)(?::([^:@]+))?(?:@(.+))?");
 
+    @NotNull
     private final String configuration;  // implementation, api, testImplementation, etc.
+    @NotNull
     private final String group;
+    @NotNull
     private final String name;
+    @Nullable
     private final String version;        // may be null
+    @Nullable
     private final String classifier;     // may be null
+    @NotNull
     private final String rawNotation;    // original notation string
+    @Nullable
     private final MethodCallNode sourceNode;
 
-    private DependencyItem(String configuration, String group, String name,
-                           String version, String classifier, String rawNotation,
-                           MethodCallNode sourceNode) {
+    private DependencyItem(@NotNull String configuration, @NotNull String group, @NotNull String name,
+                           @Nullable String version, @Nullable String classifier, @NotNull String rawNotation,
+                           @Nullable MethodCallNode sourceNode) {
         this.configuration = configuration;
         this.group = group;
         this.name = name;
@@ -36,7 +45,8 @@ public final class DependencyItem {
         this.sourceNode = sourceNode;
     }
 
-    public static DependencyItem fromMethodCall(MethodCallNode node) {
+    @NotNull
+    public static DependencyItem fromMethodCall(@NotNull MethodCallNode node) {
         String config = node.getMethodName();
         String arg = node.getFirstArgument();
 
@@ -49,8 +59,9 @@ public final class DependencyItem {
         return parseStringNotation(config, arg, node);
     }
 
-    private static DependencyItem parseStringNotation(String config, String notation,
-                                                      MethodCallNode node) {
+    @NotNull
+    private static DependencyItem parseStringNotation(@NotNull String config, @NotNull String notation,
+                                                      @NotNull MethodCallNode node) {
         Matcher matcher = COORDINATE_PATTERN.matcher(notation);
         if (matcher.matches()) {
             return new DependencyItem(
@@ -68,8 +79,9 @@ public final class DependencyItem {
         return new DependencyItem(config, "", notation, null, null, notation, node);
     }
 
-    private static DependencyItem parseMapNotation(String config, String notation,
-                                                   MethodCallNode node) {
+    @NotNull
+    private static DependencyItem parseMapNotation(@NotNull String config, @NotNull String notation,
+                                                   @NotNull MethodCallNode node) {
         String group = extractMapValue(notation, "group");
         String name = extractMapValue(notation, "name");
         String version = extractMapValue(notation, "version");
@@ -77,7 +89,8 @@ public final class DependencyItem {
         return new DependencyItem(config, group, name, version, null, notation, node);
     }
 
-    private static String extractMapValue(String notation, String key) {
+    @NotNull
+    private static String extractMapValue(@NotNull String notation, @NotNull String key) {
         Pattern pattern = Pattern.compile(key + "\\s*:\\s*['\"]?([^'\"\\s,]+)['\"]?");
         Matcher matcher = pattern.matcher(notation);
         if (matcher.find()) {
@@ -86,30 +99,37 @@ public final class DependencyItem {
         return "";
     }
 
+    @NotNull
     public String getConfiguration() {
         return configuration;
     }
 
+    @NotNull
     public String getGroup() {
         return group;
     }
 
+    @NotNull
     public String getName() {
         return name;
     }
 
+    @Nullable
     public String getVersion() {
         return version;
     }
 
+    @Nullable
     public String getClassifier() {
         return classifier;
     }
 
+    @NotNull
     public String getRawNotation() {
         return rawNotation;
     }
 
+    @Nullable
     public MethodCallNode getSourceNode() {
         return sourceNode;
     }
@@ -117,6 +137,7 @@ public final class DependencyItem {
     /**
      * @return group:name (without version) for matching purposes
      */
+    @NotNull
     public String getCoordinateKey() {
         return group + ":" + name;
     }
@@ -124,6 +145,7 @@ public final class DependencyItem {
     /**
      * @return full coordinate with version
      */
+    @NotNull
     public String getFullCoordinate() {
         if (version != null && !version.isEmpty()) {
             return group + ":" + name + ":" + version;
@@ -134,7 +156,8 @@ public final class DependencyItem {
     /**
      * Create a new DependencyItem with updated version.
      */
-    public DependencyItem withVersion(String newVersion) {
+    @NotNull
+    public DependencyItem withVersion(@Nullable String newVersion) {
         return new DependencyItem(configuration, group, name, newVersion, classifier,
                 rawNotation, sourceNode);
     }
@@ -142,7 +165,7 @@ public final class DependencyItem {
     /**
      * @return true if this represents the same dependency (ignoring version)
      */
-    public boolean sameArtifact(DependencyItem other) {
+    public boolean sameArtifact(@NotNull DependencyItem other) {
         return Objects.equals(group, other.group) && Objects.equals(name, other.name);
     }
 

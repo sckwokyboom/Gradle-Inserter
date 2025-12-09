@@ -3,6 +3,8 @@ package com.github.gradleinserter.view;
 import com.github.gradleinserter.ir.BlockNode;
 import com.github.gradleinserter.ir.IRNode;
 import com.github.gradleinserter.ir.MethodCallNode;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -11,10 +13,12 @@ import java.util.*;
  */
 public final class DependenciesView implements SemanticView {
 
+    @Nullable
     private final BlockNode blockNode;
+    @NotNull
     private final List<DependencyItem> dependencies;
 
-    public DependenciesView(BlockNode blockNode) {
+    public DependenciesView(@NotNull BlockNode blockNode) {
         this.blockNode = blockNode;
         this.dependencies = extractDependencies(blockNode);
     }
@@ -22,7 +26,7 @@ public final class DependenciesView implements SemanticView {
     /**
      * Create a synthetic view from a list of method calls (snippet without block wrapper).
      */
-    public DependenciesView(List<MethodCallNode> calls) {
+    public DependenciesView(@NotNull List<MethodCallNode> calls) {
         this.blockNode = null;
         this.dependencies = new ArrayList<>();
         for (MethodCallNode call : calls) {
@@ -32,7 +36,8 @@ public final class DependenciesView implements SemanticView {
         }
     }
 
-    private List<DependencyItem> extractDependencies(BlockNode block) {
+    @NotNull
+    private List<DependencyItem> extractDependencies(@NotNull BlockNode block) {
         List<DependencyItem> result = new ArrayList<>();
         for (IRNode child : block.getChildren()) {
             if (child instanceof MethodCallNode) {
@@ -45,7 +50,7 @@ public final class DependenciesView implements SemanticView {
         return result;
     }
 
-    private static boolean isDependencyConfiguration(String name) {
+    private static boolean isDependencyConfiguration(@NotNull String name) {
         // Common Gradle dependency configurations
         return name.equals("implementation")
                 || name.equals("api")
@@ -71,20 +76,24 @@ public final class DependenciesView implements SemanticView {
                 || name.contains("RuntimeOnly");
     }
 
+    @NotNull
     @Override
     public ViewType getType() {
         return ViewType.DEPENDENCIES;
     }
 
+    @Nullable
     @Override
     public IRNode getIRNode() {
         return blockNode;
     }
 
+    @Nullable
     public BlockNode getBlockNode() {
         return blockNode;
     }
 
+    @NotNull
     public List<DependencyItem> getDependencies() {
         return Collections.unmodifiableList(dependencies);
     }
@@ -92,7 +101,8 @@ public final class DependenciesView implements SemanticView {
     /**
      * Find dependency by coordinates (group:name).
      */
-    public Optional<DependencyItem> findByCoordinate(String group, String name) {
+    @NotNull
+    public Optional<DependencyItem> findByCoordinate(@NotNull String group, @NotNull String name) {
         return dependencies.stream()
                 .filter(d -> Objects.equals(d.getGroup(), group) && Objects.equals(d.getName(), name))
                 .findFirst();
@@ -101,7 +111,8 @@ public final class DependenciesView implements SemanticView {
     /**
      * Find all dependencies with the same artifact (ignoring version).
      */
-    public List<DependencyItem> findByArtifact(DependencyItem item) {
+    @NotNull
+    public List<DependencyItem> findByArtifact(@NotNull DependencyItem item) {
         List<DependencyItem> result = new ArrayList<>();
         for (DependencyItem dep : dependencies) {
             if (dep.sameArtifact(item)) {

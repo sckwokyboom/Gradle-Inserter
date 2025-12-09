@@ -7,6 +7,8 @@ import com.github.gradleinserter.merge.*;
 import com.github.gradleinserter.parser.GroovyScriptParser;
 import com.github.gradleinserter.parser.ScriptParser;
 import com.github.gradleinserter.view.*;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -22,13 +24,17 @@ import java.util.*;
  */
 public final class GradleInserter {
 
+    @NotNull
     private final ScriptParser parser;
+    @NotNull
     private final ViewExtractor viewExtractor;
+    @NotNull
     private final MergeStrategyRegistry strategyRegistry;
+    @NotNull
     private final SnippetAnalyzer snippetAnalyzer;
 
-    private GradleInserter(ScriptParser parser, ViewExtractor viewExtractor,
-                          MergeStrategyRegistry strategyRegistry) {
+    private GradleInserter(@NotNull ScriptParser parser, @NotNull ViewExtractor viewExtractor,
+                          @NotNull MergeStrategyRegistry strategyRegistry) {
         this.parser = parser;
         this.viewExtractor = viewExtractor;
         this.strategyRegistry = strategyRegistry;
@@ -38,6 +44,7 @@ public final class GradleInserter {
     /**
      * Create a new GradleInserter with default configuration.
      */
+    @NotNull
     public static GradleInserter create() {
         return new GradleInserter(
                 new GroovyScriptParser(),
@@ -49,6 +56,7 @@ public final class GradleInserter {
     /**
      * Create a builder for custom configuration.
      */
+    @NotNull
     public static Builder builder() {
         return new Builder();
     }
@@ -60,7 +68,8 @@ public final class GradleInserter {
      * @param snippet        the snippet with LLM recommendations
      * @return list of edits to apply (sorted by offset, descending)
      */
-    public List<IInsertionEdit> generateEdits(String originalScript, String snippet) {
+    @NotNull
+    public List<IInsertionEdit> generateEdits(@NotNull String originalScript, @Nullable String snippet) {
         // Parse original script
         List<IRNode> originalNodes = parser.parse(originalScript);
         List<SemanticView> originalViews = viewExtractor.extract(originalNodes);
@@ -105,7 +114,8 @@ public final class GradleInserter {
      * @param edits          the edits to apply (will be sorted internally)
      * @return the modified script
      */
-    public String applyEdits(String originalScript, List<IInsertionEdit> edits) {
+    @NotNull
+    public String applyEdits(@NotNull String originalScript, @NotNull List<IInsertionEdit> edits) {
         // Sort edits by offset (descending) to apply from end to start
         List<IInsertionEdit> sortedEdits = new ArrayList<>(edits);
         sortedEdits.sort(Comparator.comparingInt(IInsertionEdit::getStartOffset).reversed());
@@ -122,13 +132,15 @@ public final class GradleInserter {
     /**
      * Convenience method to directly get the modified script.
      */
-    public String insert(String originalScript, String snippet) {
+    @NotNull
+    public String insert(@NotNull String originalScript, @Nullable String snippet) {
         List<IInsertionEdit> edits = generateEdits(originalScript, snippet);
         return applyEdits(originalScript, edits);
     }
 
-    private SemanticView findMatchingOriginalView(List<SemanticView> originalViews,
-                                                   SemanticView snippetView) {
+    @Nullable
+    private SemanticView findMatchingOriginalView(@NotNull List<SemanticView> originalViews,
+                                                   @NotNull SemanticView snippetView) {
         for (SemanticView original : originalViews) {
             if (viewsMatch(original, snippetView)) {
                 return original;
@@ -137,7 +149,7 @@ public final class GradleInserter {
         return null;
     }
 
-    private boolean viewsMatch(SemanticView original, SemanticView snippet) {
+    private boolean viewsMatch(@NotNull SemanticView original, @NotNull SemanticView snippet) {
         if (original.getType() != snippet.getType()) {
             return false;
         }
@@ -151,9 +163,10 @@ public final class GradleInserter {
         return true;
     }
 
+    @NotNull
     @SuppressWarnings("unchecked")
-    private List<IInsertionEdit> mergeView(SemanticView original, SemanticView snippet,
-                                            String originalScript, MergeContext context) {
+    private List<IInsertionEdit> mergeView(@Nullable SemanticView original, @NotNull SemanticView snippet,
+                                            @NotNull String originalScript, @NotNull MergeContext context) {
         Optional<MergeStrategy<SemanticView>> strategy =
                 strategyRegistry.findStrategy(original, snippet);
 
@@ -168,10 +181,11 @@ public final class GradleInserter {
      * Helper class for stable sorting of edits.
      */
     private static final class IndexedEdit {
+        @NotNull
         final IInsertionEdit edit;
         final int index;
 
-        IndexedEdit(IInsertionEdit edit, int index) {
+        IndexedEdit(@NotNull IInsertionEdit edit, int index) {
             this.edit = edit;
             this.index = index;
         }
@@ -181,8 +195,11 @@ public final class GradleInserter {
      * Builder for GradleInserter with custom configuration.
      */
     public static final class Builder {
+        @NotNull
         private ScriptParser parser;
+        @NotNull
         private ViewExtractor viewExtractor;
+        @NotNull
         private MergeStrategyRegistry strategyRegistry;
 
         private Builder() {
@@ -191,26 +208,31 @@ public final class GradleInserter {
             this.strategyRegistry = new MergeStrategyRegistry();
         }
 
-        public Builder withParser(ScriptParser parser) {
+        @NotNull
+        public Builder withParser(@NotNull ScriptParser parser) {
             this.parser = parser;
             return this;
         }
 
-        public Builder withViewExtractor(ViewExtractor viewExtractor) {
+        @NotNull
+        public Builder withViewExtractor(@NotNull ViewExtractor viewExtractor) {
             this.viewExtractor = viewExtractor;
             return this;
         }
 
-        public Builder withStrategyRegistry(MergeStrategyRegistry registry) {
+        @NotNull
+        public Builder withStrategyRegistry(@NotNull MergeStrategyRegistry registry) {
             this.strategyRegistry = registry;
             return this;
         }
 
-        public Builder withStrategy(MergeStrategy<?> strategy) {
+        @NotNull
+        public Builder withStrategy(@NotNull MergeStrategy<?> strategy) {
             this.strategyRegistry.register(strategy);
             return this;
         }
 
+        @NotNull
         public GradleInserter build() {
             return new GradleInserter(parser, viewExtractor, strategyRegistry);
         }
