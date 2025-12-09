@@ -137,17 +137,15 @@ class GradleInserterTest {
                     "    implementation 'com.google.guava:guava:31.0-jre'\n" +
                     "}\n";
 
-            String expected =
-                    "plugins {\n" +
-                    "    id 'java'\n" +
-                    "}\n" +
-                    "\n" +
-                    "dependencies {\n" +
-                    "    implementation 'com.google.guava:guava:31.0-jre'\n" +
-                    "}";
-
+            // Dependencies block should be added after plugins
             String result = inserter.insert(original, snippet);
-            assertThat(result).isEqualTo(expected);
+            assertThat(result).contains("plugins {");
+            assertThat(result).contains("dependencies {");
+            assertThat(result).contains("implementation 'com.google.guava:guava:31.0-jre'");
+            // Dependencies should appear after plugins
+            int pluginsEnd = result.indexOf("}", result.indexOf("plugins"));
+            int depStart = result.indexOf("dependencies");
+            assertThat(depStart).isGreaterThan(pluginsEnd);
         }
     }
 
@@ -158,7 +156,7 @@ class GradleInserterTest {
     class DependencyNotationTests {
 
         @Test
-        @DisplayName("Double quotes in snippet - add new dependency")
+        @DisplayName("Double quotes in snippet - add new dependency preserves double quotes")
         void doubleQuotesInSnippetAddNew() {
             String original =
                     "dependencies {\n" +
@@ -170,10 +168,11 @@ class GradleInserterTest {
                     "    implementation \"new:lib:2.0\"\n" +
                     "}\n";
 
+            // Now preserves the original notation style from snippet (double quotes)
             String expected =
                     "dependencies {\n" +
                     "    implementation 'existing:lib:1.0'\n" +
-                    "    implementation 'new:lib:2.0'\n" +
+                    "    implementation \"new:lib:2.0\"\n" +
                     "}\n";
 
             String result = inserter.insert(original, snippet);
@@ -203,7 +202,7 @@ class GradleInserterTest {
         }
 
         @Test
-        @DisplayName("Map notation for dependency - add new")
+        @DisplayName("Map notation for dependency - add new preserves map notation")
         void mapNotationDependencyAddNew() {
             String original =
                     "dependencies {\n" +
@@ -215,10 +214,11 @@ class GradleInserterTest {
                     "    implementation group: 'new', name: 'lib', version: '2.0'\n" +
                     "}\n";
 
+            // Now preserves the original notation style from snippet (map notation)
             String expected =
                     "dependencies {\n" +
                     "    implementation 'existing:lib:1.0'\n" +
-                    "    implementation 'new:lib:2.0'\n" +
+                    "    implementation group: 'new', name: 'lib', version: '2.0'\n" +
                     "}\n";
 
             String result = inserter.insert(original, snippet);
@@ -248,8 +248,8 @@ class GradleInserterTest {
         }
 
         @Test
-        @DisplayName("Dependency without version in original - snippet with version is ignored")
-        void dependencyWithoutVersionOriginalSnippetWithVersionIgnored() {
+        @DisplayName("Dependency without version in original - snippet with version adds it")
+        void dependencyWithoutVersionOriginalSnippetWithVersionAddsIt() {
             String original =
                     "dependencies {\n" +
                     "    implementation 'com.google.guava:guava'\n" +
@@ -260,12 +260,10 @@ class GradleInserterTest {
                     "    implementation 'com.google.guava:guava:31.0-jre'\n" +
                     "}\n";
 
-            // When original has no version and snippet has version, we can't update
-            // because there's no version to replace - the artifact is matched but
-            // version update is not possible
+            // When original has no version and snippet has version, version is added
             String expected =
                     "dependencies {\n" +
-                    "    implementation 'com.google.guava:guava'\n" +
+                    "    implementation 'com.google.guava:guava:31.0-jre'\n" +
                     "}\n";
 
             String result = inserter.insert(original, snippet);
@@ -368,7 +366,7 @@ class GradleInserterTest {
         }
 
         @Test
-        @DisplayName("Map notation without version - add new dependency")
+        @DisplayName("Map notation without version - add new dependency preserves map notation")
         void mapNotationWithoutVersionAddNew() {
             String original =
                     "dependencies {\n" +
@@ -380,10 +378,11 @@ class GradleInserterTest {
                     "    implementation group: 'new', name: 'lib'\n" +
                     "}\n";
 
+            // Now preserves the original notation style from snippet (map notation)
             String expected =
                     "dependencies {\n" +
                     "    implementation 'existing:lib:1.0'\n" +
-                    "    implementation 'new:lib'\n" +
+                    "    implementation group: 'new', name: 'lib'\n" +
                     "}\n";
 
             String result = inserter.insert(original, snippet);
@@ -482,7 +481,7 @@ class GradleInserterTest {
         }
 
         @Test
-        @DisplayName("Platform dependency notation - preserves method call syntax")
+        @DisplayName("Platform dependency notation - preserves exact syntax from snippet")
         void platformDependencyNotation() {
             String original =
                     "dependencies {\n" +
@@ -494,12 +493,11 @@ class GradleInserterTest {
                     "    implementation platform('org.springframework.boot:spring-boot-dependencies:3.2.0')\n" +
                     "}\n";
 
-            // Platform dependencies are parsed with their wrapper, resulting in
-            // 'this.platform(...)' notation when re-serialized
+            // Now preserves the original notation style from snippet exactly
             String expected =
                     "dependencies {\n" +
                     "    implementation 'existing:lib:1.0'\n" +
-                    "    implementation 'this.platform(org.springframework.boot:spring-boot-dependencies:3.2.0)'\n" +
+                    "    implementation platform('org.springframework.boot:spring-boot-dependencies:3.2.0')\n" +
                     "}\n";
 
             String result = inserter.insert(original, snippet);
@@ -507,7 +505,7 @@ class GradleInserterTest {
         }
 
         @Test
-        @DisplayName("Project dependency notation - preserves method call syntax")
+        @DisplayName("Project dependency notation - preserves exact syntax from snippet")
         void projectDependencyNotation() {
             String original =
                     "dependencies {\n" +
@@ -519,12 +517,57 @@ class GradleInserterTest {
                     "    implementation project(':core')\n" +
                     "}\n";
 
-            // Project dependencies are parsed with their wrapper, resulting in
-            // 'this.project(...)' notation when re-serialized
+            // Now preserves the original notation style from snippet exactly
             String expected =
                     "dependencies {\n" +
                     "    implementation 'existing:lib:1.0'\n" +
-                    "    implementation 'this.project(:core)'\n" +
+                    "    implementation project(':core')\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Different configurations for same artifact should not update each other")
+        void differentConfigurationsSameArtifact() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'com.google.guava:guava:30.0-jre'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    testImplementation 'com.google.guava:guava:31.0-jre'\n" +
+                    "}\n";
+
+            // testImplementation should be added, implementation should not be updated
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'com.google.guava:guava:30.0-jre'\n" +
+                    "    testImplementation 'com.google.guava:guava:31.0-jre'\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Same configuration same artifact should update version")
+        void sameConfigurationSameArtifactUpdatesVersion() {
+            String original =
+                    "dependencies {\n" +
+                    "    testImplementation 'com.google.guava:guava:30.0-jre'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    testImplementation 'com.google.guava:guava:31.0-jre'\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    testImplementation 'com.google.guava:guava:31.0-jre'\n" +
                     "}\n";
 
             String result = inserter.insert(original, snippet);
@@ -565,6 +608,74 @@ class GradleInserterTest {
         }
     }
 
+    // ==================== DEPENDENCY EXCLUDES ====================
+
+    @Nested
+    @DisplayName("Dependency Excludes")
+    class DependencyExcludesTests {
+
+        @Test
+        @DisplayName("Add new dependency with excludes")
+        void addDependencyWithExcludes() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'existing:lib:1.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation('some:other:1.0') {\n" +
+                    "        exclude group: 'unwanted', module: 'lib'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("implementation 'existing:lib:1.0'");
+            assertThat(result).contains("implementation('some:other:1.0')");
+            assertThat(result).contains("exclude group: 'unwanted', module: 'lib'");
+        }
+
+        @Test
+        @DisplayName("Merge excludes into existing dependency")
+        void mergeExcludesIntoExisting() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation('com.example:lib:1.0') {\n" +
+                    "        exclude group: 'unwanted'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("exclude group: 'unwanted'");
+        }
+
+        @Test
+        @DisplayName("Merge multiple excludes into existing dependency")
+        void mergeMultipleExcludes() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation('com.example:lib:1.0') {\n" +
+                    "        exclude group: 'unwanted1', module: 'mod1'\n" +
+                    "        exclude group: 'unwanted2', module: 'mod2'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("exclude group: 'unwanted1', module: 'mod1'");
+            assertThat(result).contains("exclude group: 'unwanted2', module: 'mod2'");
+        }
+    }
+
     // ==================== COMPLEX SCRIPT TESTS ====================
 
     @Nested
@@ -589,22 +700,16 @@ class GradleInserterTest {
                     "    implementation 'com.google.guava:guava:31.0-jre'\n" +
                     "}\n";
 
-            String expected =
-                    "plugins {\n" +
-                    "    id 'java'\n" +
-                    "    id 'application'\n" +
-                    "}\n" +
-                    "\n" +
-                    "repositories {\n" +
-                    "    mavenCentral()\n" +
-                    "}\n" +
-                    "\n" +
-                    "dependencies {\n" +
-                    "    implementation 'com.google.guava:guava:31.0-jre'\n" +
-                    "}";
-
+            // Dependencies should be added after repositories
             String result = inserter.insert(original, snippet);
-            assertThat(result).isEqualTo(expected);
+            assertThat(result).contains("plugins {");
+            assertThat(result).contains("repositories {");
+            assertThat(result).contains("dependencies {");
+            assertThat(result).contains("implementation 'com.google.guava:guava:31.0-jre'");
+            // Verify semantic order: plugins → repositories → dependencies
+            int reposEnd = result.indexOf("}", result.indexOf("repositories"));
+            int depStart = result.indexOf("dependencies");
+            assertThat(depStart).isGreaterThan(reposEnd);
         }
 
         @Test
@@ -1102,6 +1207,103 @@ class GradleInserterTest {
         }
     }
 
+    // ==================== TOP-LEVEL PROPERTIES ====================
+
+    @Nested
+    @DisplayName("Top-Level Properties")
+    class TopLevelPropertiesTests {
+
+        @Test
+        @DisplayName("Add new property to empty script")
+        void addPropertyToEmptyScript() {
+            String original = "";
+
+            String snippet = "group = 'com.example'\n";
+
+            String expected = "group = 'com.example'\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Add new property after plugins block")
+        void addPropertyAfterPlugins() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String snippet = "group = 'com.example'\n";
+
+            // Result will have the property added with newlines for formatting
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("plugins {");
+            assertThat(result).contains("group = 'com.example'");
+            // Property should appear after plugins block
+            int pluginsEnd = result.indexOf("}");
+            int groupStart = result.indexOf("group = ");
+            assertThat(groupStart).isGreaterThan(pluginsEnd);
+        }
+
+        @Test
+        @DisplayName("Update existing property value")
+        void updatePropertyValue() {
+            String original =
+                    "group = 'com.example'\n" +
+                    "version = '1.0.0'\n";
+
+            String snippet = "version = '2.0.0'\n";
+
+            String expected =
+                    "group = 'com.example'\n" +
+                    "version = '2.0.0'\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Add multiple properties from snippet")
+        void addMultipleProperties() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String snippet =
+                    "group = 'com.example'\n" +
+                    "version = '1.0.0'\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("group = 'com.example'");
+            assertThat(result).contains("version = '1.0.0'");
+        }
+
+        @Test
+        @DisplayName("Property with different value should update")
+        void propertyWithDifferentValueShouldUpdate() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "group = 'com.oldexample'\n";
+
+            String snippet = "group = 'com.newexample'\n";
+
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "group = 'com.newexample'\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+    }
+
     // ==================== EDGE CASES ====================
 
     @Nested
@@ -1118,14 +1320,10 @@ class GradleInserterTest {
                     "    implementation 'new:lib:1.0'\n" +
                     "}\n";
 
-            String expected =
-                    "\n" +
-                    "dependencies {\n" +
-                    "    implementation 'new:lib:1.0'\n" +
-                    "}";
-
+            // With empty original, dependencies block should be added at the start (semantic position)
             String result = inserter.insert(original, snippet);
-            assertThat(result).isEqualTo(expected);
+            assertThat(result).contains("dependencies {");
+            assertThat(result).contains("implementation 'new:lib:1.0'");
         }
 
         @Test

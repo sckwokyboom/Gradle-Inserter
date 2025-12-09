@@ -1,9 +1,13 @@
 package com.github.gradleinserter.view;
 
+import com.github.gradleinserter.ir.IRNode;
 import com.github.gradleinserter.ir.MethodCallNode;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,10 +36,12 @@ public final class DependencyItem {
     private final String rawNotation;    // original notation string
     @Nullable
     private final MethodCallNode sourceNode;
+    @NotNull
+    private final List<ExcludeItem> excludes;
 
     private DependencyItem(@NotNull String configuration, @NotNull String group, @NotNull String name,
                            @Nullable String version, @Nullable String classifier, @NotNull String rawNotation,
-                           @Nullable MethodCallNode sourceNode) {
+                           @Nullable MethodCallNode sourceNode, @NotNull List<ExcludeItem> excludes) {
         this.configuration = configuration;
         this.group = group;
         this.name = name;
@@ -43,6 +49,7 @@ public final class DependencyItem {
         this.classifier = classifier;
         this.rawNotation = rawNotation;
         this.sourceNode = sourceNode;
+        this.excludes = Collections.unmodifiableList(new ArrayList<>(excludes));
     }
 
     @NotNull
@@ -50,18 +57,50 @@ public final class DependencyItem {
         String config = node.getMethodName();
         String arg = node.getFirstArgument();
 
+        // Parse excludes from closure body if present
+        List<ExcludeItem> excludes = parseExcludes(node);
+
         // Handle map-style notation: group: 'x', name: 'y', version: 'z'
         if (arg.contains(":") && arg.contains(",")) {
-            return parseMapNotation(config, arg, node);
+            return parseMapNotation(config, arg, node, excludes);
         }
 
         // Handle string notation: 'group:name:version'
-        return parseStringNotation(config, arg, node);
+        return parseStringNotation(config, arg, node, excludes);
+    }
+
+    @NotNull
+    private static List<ExcludeItem> parseExcludes(@NotNull MethodCallNode node) {
+        List<ExcludeItem> excludes = new ArrayList<>();
+        if (!node.hasClosureBody()) {
+            return excludes;
+        }
+
+        // Get the source text of the closure body and look for exclude statements
+        IRNode closureBody = node.getClosureBody();
+        if (closureBody == null) {
+            return excludes;
+        }
+
+        String source = closureBody.getSourceText();
+        if (source == null || source.isEmpty()) {
+            return excludes;
+        }
+
+        // Pattern to find exclude statements
+        Pattern excludePattern = Pattern.compile("exclude\\s+[^\\n]+", Pattern.MULTILINE);
+        Matcher matcher = excludePattern.matcher(source);
+        while (matcher.find()) {
+            excludes.add(ExcludeItem.parse(matcher.group()));
+        }
+
+        return excludes;
     }
 
     @NotNull
     private static DependencyItem parseStringNotation(@NotNull String config, @NotNull String notation,
-                                                      @NotNull MethodCallNode node) {
+                                                      @NotNull MethodCallNode node,
+                                                      @NotNull List<ExcludeItem> excludes) {
         Matcher matcher = COORDINATE_PATTERN.matcher(notation);
         if (matcher.matches()) {
             return new DependencyItem(
@@ -71,22 +110,24 @@ public final class DependencyItem {
                     matcher.group(3),
                     matcher.group(4),
                     notation,
-                    node
+                    node,
+                    excludes
             );
         }
 
         // Fallback for unparseable notation
-        return new DependencyItem(config, "", notation, null, null, notation, node);
+        return new DependencyItem(config, "", notation, null, null, notation, node, excludes);
     }
 
     @NotNull
     private static DependencyItem parseMapNotation(@NotNull String config, @NotNull String notation,
-                                                   @NotNull MethodCallNode node) {
+                                                   @NotNull MethodCallNode node,
+                                                   @NotNull List<ExcludeItem> excludes) {
         String group = extractMapValue(notation, "group");
         String name = extractMapValue(notation, "name");
         String version = extractMapValue(notation, "version");
 
-        return new DependencyItem(config, group, name, version, null, notation, node);
+        return new DependencyItem(config, group, name, version, null, notation, node, excludes);
     }
 
     @NotNull
@@ -134,6 +175,18 @@ public final class DependencyItem {
         return sourceNode;
     }
 
+    @NotNull
+    public List<ExcludeItem> getExcludes() {
+        return excludes;
+    }
+
+    /**
+     * @return true if this dependency has any exclude declarations
+     */
+    public boolean hasExcludes() {
+        return !excludes.isEmpty();
+    }
+
     /**
      * @return group:name (without version) for matching purposes
      */
@@ -154,12 +207,30 @@ public final class DependencyItem {
     }
 
     /**
+     * Get the original source text for this dependency, preserving the exact notation style.
+     * Useful when adding a dependency from a snippet - preserves map notation, quotes, etc.
+     *
+     * @return the original source text, or a reconstructed string if source is not available
+     */
+    @NotNull
+    public String getOriginalSourceText() {
+        if (sourceNode != null) {
+            String sourceText = sourceNode.getSourceText();
+            if (sourceText != null && !sourceText.isEmpty()) {
+                return sourceText;
+            }
+        }
+        // Fallback to reconstructed string
+        return configuration + " '" + getFullCoordinate() + "'";
+    }
+
+    /**
      * Create a new DependencyItem with updated version.
      */
     @NotNull
     public DependencyItem withVersion(@Nullable String newVersion) {
         return new DependencyItem(configuration, group, name, newVersion, classifier,
-                rawNotation, sourceNode);
+                rawNotation, sourceNode, excludes);
     }
 
     /**
@@ -167,6 +238,15 @@ public final class DependencyItem {
      */
     public boolean sameArtifact(@NotNull DependencyItem other) {
         return Objects.equals(group, other.group) && Objects.equals(name, other.name);
+    }
+
+    /**
+     * @return true if this represents the same dependency with the same configuration (ignoring version)
+     */
+    public boolean sameConfigurationAndArtifact(@NotNull DependencyItem other) {
+        return Objects.equals(configuration, other.configuration)
+                && Objects.equals(group, other.group)
+                && Objects.equals(name, other.name);
     }
 
     @Override

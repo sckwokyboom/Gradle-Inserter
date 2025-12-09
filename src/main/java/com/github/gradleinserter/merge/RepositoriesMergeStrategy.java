@@ -32,9 +32,10 @@ public class RepositoriesMergeStrategy implements MergeStrategy<RepositoriesView
         if (original == null || original.getBlockNode() == null) {
             // No repositories block - create one
             String newBlock = generateRepositoriesBlock(snippet, context);
-            // Repositories typically come after plugins
-            int insertPos = findRepositoriesInsertionPoint(context);
-            edits.add(new ReplaceEdit(insertPos, insertPos, "\n" + newBlock + "\n",
+            // Use semantic insertion point
+            int insertPos = context.getSemanticInsertionPoint(SemanticView.ViewType.REPOSITORIES);
+            String prefix = insertPos > 0 ? "\n\n" : "";
+            edits.add(new ReplaceEdit(insertPos, insertPos, prefix + newBlock,
                     "Add repositories block"));
             return edits;
         }
@@ -52,15 +53,6 @@ public class RepositoriesMergeStrategy implements MergeStrategy<RepositoriesView
         }
 
         return edits;
-    }
-
-    private int findRepositoriesInsertionPoint(MergeContext context) {
-        // Try to find plugins block and insert after it
-        var pluginsView = context.findOriginalView(SemanticView.ViewType.PLUGINS);
-        if (pluginsView.isPresent() && pluginsView.get().getIRNode() != null) {
-            return pluginsView.get().getIRNode().getEndOffset();
-        }
-        return 0;
     }
 
     private String formatRepositoryLine(RepositoryItem repo, MergeContext context) {

@@ -129,6 +129,13 @@ public class GroovyScriptParser implements ScriptParser {
         // Check for closure argument (block)
         if (!exprs.isEmpty() && exprs.get(exprs.size() - 1) instanceof ClosureExpression) {
             ClosureExpression closure = (ClosureExpression) exprs.get(exprs.size() - 1);
+
+            // For dependency configurations with closure (like implementation('lib') { exclude ... }),
+            // return MethodCallNode with closureBody instead of BlockNode
+            if (isDependencyConfiguration(methodName)) {
+                return convertMethodCallWithClosure(methodName, mce, exprs, closure, source);
+            }
+
             return convertBlock(methodName, mce, closure, source);
         }
 
@@ -183,6 +190,45 @@ public class GroovyScriptParser implements ScriptParser {
             return source.substring(start, end);
         }
         return "";
+    }
+
+    private static final java.util.Set<String> DEPENDENCY_CONFIGURATIONS = java.util.Set.of(
+            "implementation", "api", "compileOnly", "runtimeOnly",
+            "testImplementation", "testCompileOnly", "testRuntimeOnly",
+            "annotationProcessor", "kapt", "ksp",
+            "compile", "runtime", "testCompile", "testRuntime", // legacy configurations
+            "classpath"
+    );
+
+    private boolean isDependencyConfiguration(String methodName) {
+        return DEPENDENCY_CONFIGURATIONS.contains(methodName);
+    }
+
+    private MethodCallNode convertMethodCallWithClosure(String methodName, MethodCallExpression mce,
+                                                        List<Expression> exprs, ClosureExpression closure,
+                                                        String source) {
+        // Extract arguments (excluding the closure)
+        List<String> args = extractArgumentsFromExpressions(exprs);
+
+        // Extract closure body source
+        int closureStart = getStartOffset(closure, source);
+        int closureEnd = getEndOffset(closure, source);
+        String closureSource = source.substring(
+                Math.max(0, closureStart),
+                Math.min(source.length(), closureEnd)
+        );
+
+        // Create RawNode for closure body
+        IRNode closureBody = new RawNode(closureStart, closureEnd, closureSource);
+
+        return new MethodCallNode(
+                methodName,
+                args,
+                closureBody,
+                getStartOffset(mce, source),
+                getEndOffset(mce, source),
+                extractSourceText(mce, source)
+        );
     }
 
     private BlockNode convertBlock(String name, MethodCallExpression mce,

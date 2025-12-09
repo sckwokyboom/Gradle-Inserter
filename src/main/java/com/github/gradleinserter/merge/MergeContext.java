@@ -59,6 +59,77 @@ public final class MergeContext {
     }
 
     /**
+     * Get the position for inserting a block according to Gradle semantic ordering.
+     * Order: plugins → properties → repositories → dependencies → other blocks
+     *
+     * @param blockType the type of block to insert
+     * @return the appropriate insertion position
+     */
+    public int getSemanticInsertionPoint(SemanticView.ViewType blockType) {
+        switch (blockType) {
+            case PLUGINS:
+                // Plugins should be first
+                return 0;
+
+            case PROPERTY:
+                // Properties go after plugins
+                return findInsertionPointAfter(SemanticView.ViewType.PLUGINS)
+                        .orElse(0);
+
+            case REPOSITORIES:
+                // Repositories go after plugins and properties
+                return findInsertionPointAfterLast(
+                        SemanticView.ViewType.PLUGINS,
+                        SemanticView.ViewType.PROPERTY
+                ).orElse(0);
+
+            case DEPENDENCIES:
+                // Dependencies go after plugins, properties, and repositories
+                return findInsertionPointAfterLast(
+                        SemanticView.ViewType.PLUGINS,
+                        SemanticView.ViewType.PROPERTY,
+                        SemanticView.ViewType.REPOSITORIES
+                ).orElse(originalSource.length());
+
+            default:
+                // Unknown blocks go at the end
+                return originalSource.length();
+        }
+    }
+
+    /**
+     * Find insertion point after a specific block type.
+     */
+    private Optional<Integer> findInsertionPointAfter(SemanticView.ViewType type) {
+        return findOriginalView(type)
+                .filter(v -> v.getIRNode() != null)
+                .map(v -> v.getIRNode().getEndOffset());
+    }
+
+    /**
+     * Find insertion point after the last of several block types.
+     */
+    private Optional<Integer> findInsertionPointAfterLast(SemanticView.ViewType... types) {
+        int maxEnd = -1;
+        for (SemanticView.ViewType type : types) {
+            Optional<Integer> end = findInsertionPointAfter(type);
+            if (end.isPresent() && end.get() > maxEnd) {
+                maxEnd = end.get();
+            }
+        }
+        // Also check all properties (there may be multiple)
+        for (SemanticView view : originalViews) {
+            if (view.getType() == SemanticView.ViewType.PROPERTY && view.getIRNode() != null) {
+                int end = view.getIRNode().getEndOffset();
+                if (end > maxEnd) {
+                    maxEnd = end;
+                }
+            }
+        }
+        return maxEnd >= 0 ? Optional.of(maxEnd) : Optional.empty();
+    }
+
+    /**
      * Detect indentation used in the source.
      */
     private static String detectIndentation(String source) {

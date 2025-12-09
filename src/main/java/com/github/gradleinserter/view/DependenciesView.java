@@ -122,6 +122,18 @@ public final class DependenciesView implements SemanticView {
         return result;
     }
 
+    /**
+     * Find dependency with the same configuration and artifact (ignoring version).
+     * This is more precise than findByArtifact - testImplementation and implementation
+     * for the same artifact are treated as different dependencies.
+     */
+    @NotNull
+    public Optional<DependencyItem> findByConfigurationAndArtifact(@NotNull DependencyItem item) {
+        return dependencies.stream()
+                .filter(dep -> dep.sameConfigurationAndArtifact(item))
+                .findFirst();
+    }
+
     @Override
     public String toString() {
         return "DependenciesView{dependencies=" + dependencies.size() + "}";

@@ -160,6 +160,12 @@ public final class GradleInserter {
                     .equals(((UnknownBlockView) snippet).getBlockName());
         }
 
+        // For properties, match by property name
+        if (original instanceof PropertyView && snippet instanceof PropertyView) {
+            return ((PropertyView) original).getName()
+                    .equals(((PropertyView) snippet).getName());
+        }
+
         return true;
     }
 

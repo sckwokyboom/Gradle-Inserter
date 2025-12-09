@@ -17,6 +17,7 @@ public class MergeStrategyRegistry {
         register(new DependenciesMergeStrategy());
         register(new PluginsMergeStrategy());
         register(new RepositoriesMergeStrategy());
+        register(new PropertyMergeStrategy());
         register(new UnknownBlockMergeStrategy());
         register(new RawContentMergeStrategy());
     }
