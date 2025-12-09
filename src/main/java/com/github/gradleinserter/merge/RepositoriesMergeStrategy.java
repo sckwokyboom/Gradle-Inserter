@@ -58,13 +58,8 @@ public class RepositoriesMergeStrategy implements MergeStrategy<RepositoriesView
     private String formatRepositoryLine(RepositoryItem repo, MergeContext context) {
         StringBuilder sb = new StringBuilder();
         sb.append(context.getIndentation());
-
-        if (repo.getUrl() != null) {
-            sb.append("maven { url '").append(repo.getUrl()).append("' }");
-        } else {
-            sb.append(repo.getName()).append("()");
-        }
-
+        // Use original source text to preserve all nested properties
+        sb.append(repo.getOriginalSourceText());
         sb.append("\n");
         return sb.toString();
     }
@@ -75,11 +70,8 @@ public class RepositoriesMergeStrategy implements MergeStrategy<RepositoriesView
 
         for (RepositoryItem repo : snippet.getRepositories()) {
             sb.append("\n").append(context.getIndentation());
-            if (repo.getUrl() != null) {
-                sb.append("maven { url '").append(repo.getUrl()).append("' }");
-            } else {
-                sb.append(repo.getName()).append("()");
-            }
+            // Use original source text to preserve all nested properties
+            sb.append(repo.getOriginalSourceText());
         }
 
         sb.append("\n}");

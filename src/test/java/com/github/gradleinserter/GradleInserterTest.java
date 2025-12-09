@@ -746,6 +746,87 @@ class GradleInserterTest {
         }
 
         @Test
+        @DisplayName("Add maven repository with nested properties - preserves all nested content")
+        void addMavenWithNestedProperties() {
+            String original =
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n";
+
+            String snippet =
+                    "repositories {\n" +
+                    "    maven {\n" +
+                    "        url = uri('https://internal.repo.example.com/maven')\n" +
+                    "        allowInsecureProtocol = true\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("mavenCentral()");
+            assertThat(result).contains("maven {");
+            assertThat(result).contains("url = uri('https://internal.repo.example.com/maven')");
+            assertThat(result).contains("allowInsecureProtocol = true");
+        }
+
+        @Test
+        @DisplayName("Add maven repository with credentials - preserves all nested content")
+        void addMavenWithCredentials() {
+            String original =
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n";
+
+            String snippet =
+                    "repositories {\n" +
+                    "    maven {\n" +
+                    "        url = 'https://private.repo.com/releases'\n" +
+                    "        credentials {\n" +
+                    "            username = project.findProperty('repoUser') ?: ''\n" +
+                    "            password = project.findProperty('repoPass') ?: ''\n" +
+                    "        }\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("mavenCentral()");
+            assertThat(result).contains("maven {");
+            assertThat(result).contains("url = 'https://private.repo.com/releases'");
+            assertThat(result).contains("credentials {");
+            assertThat(result).contains("username = project.findProperty('repoUser')");
+            assertThat(result).contains("password = project.findProperty('repoPass')");
+        }
+
+        @Test
+        @DisplayName("Create new repositories block with complex maven - preserves nested structure")
+        void createRepositoriesWithComplexMaven() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String snippet =
+                    "repositories {\n" +
+                    "    maven {\n" +
+                    "        url = 'https://corp.internal/maven'\n" +
+                    "        allowInsecureProtocol = true\n" +
+                    "        metadataSources {\n" +
+                    "            mavenPom()\n" +
+                    "            artifact()\n" +
+                    "        }\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("repositories {");
+            assertThat(result).contains("maven {");
+            assertThat(result).contains("url = 'https://corp.internal/maven'");
+            assertThat(result).contains("allowInsecureProtocol = true");
+            assertThat(result).contains("metadataSources {");
+            assertThat(result).contains("mavenPom()");
+            assertThat(result).contains("artifact()");
+        }
+
+        @Test
         @DisplayName("Full build script with multiple block modifications")
         void fullBuildScriptModifications() {
             String original =
