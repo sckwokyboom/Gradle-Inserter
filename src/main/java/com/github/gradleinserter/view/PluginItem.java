@@ -18,18 +18,25 @@ public final class PluginItem {
     private final String version;  // may be null
     private final boolean apply;   // false if 'apply false'
     private final MethodCallNode sourceNode;
+    private final String quoteStyle;  // ' or " - for preserving notation
 
     public PluginItem(String id, String version, boolean apply, MethodCallNode sourceNode) {
+        this(id, version, apply, sourceNode, "'");
+    }
+
+    public PluginItem(String id, String version, boolean apply, MethodCallNode sourceNode, String quoteStyle) {
         this.id = Objects.requireNonNull(id, "id");
         this.version = version;
         this.apply = apply;
         this.sourceNode = sourceNode;
+        this.quoteStyle = quoteStyle != null ? quoteStyle : "'";
     }
 
     public static PluginItem fromMethodCall(MethodCallNode node) {
         String id = "";
         String version = null;
         boolean apply = true;
+        String quoteStyle = "'";
 
         String methodName = node.getMethodName();
         String arg = node.getFirstArgument();
@@ -38,6 +45,10 @@ public final class PluginItem {
             id = arg;
             // Check for version in source
             String source = node.getSourceText();
+
+            // Detect quote style from source
+            quoteStyle = detectQuoteStyle(source);
+
             Matcher matcher = VERSION_PATTERN.matcher(source);
             if (matcher.find()) {
                 version = matcher.group(1);
@@ -52,7 +63,20 @@ public final class PluginItem {
             id = methodName;
         }
 
-        return new PluginItem(id, version, apply, node);
+        return new PluginItem(id, version, apply, node, quoteStyle);
+    }
+
+    private static String detectQuoteStyle(String source) {
+        // Find the first quote character in the source
+        for (int i = 0; i < source.length(); i++) {
+            char c = source.charAt(i);
+            if (c == '\'') {
+                return "'";
+            } else if (c == '"') {
+                return "\"";
+            }
+        }
+        return "'";  // default to single quote
     }
 
     public String getId() {
@@ -71,11 +95,15 @@ public final class PluginItem {
         return sourceNode;
     }
 
+    public String getQuoteStyle() {
+        return quoteStyle;
+    }
+
     /**
      * Create a new PluginItem with updated version.
      */
     public PluginItem withVersion(String newVersion) {
-        return new PluginItem(id, newVersion, apply, sourceNode);
+        return new PluginItem(id, newVersion, apply, sourceNode, quoteStyle);
     }
 
     @Override

@@ -41,7 +41,8 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
             String newBlock = generateDependenciesBlock(snippet, context);
             int insertPos = context.getSemanticInsertionPoint(SemanticView.ViewType.DEPENDENCIES);
             String prefix = insertPos > 0 ? "\n\n" : "";
-            edits.add(new ReplaceEdit(insertPos, insertPos, prefix + newBlock,
+            String suffix = "\n";
+            edits.add(new ReplaceEdit(insertPos, insertPos, prefix + newBlock + suffix,
                     "Add dependencies block"));
             return edits;
         }
@@ -110,7 +111,9 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
 
         // Case 1: Existing dependency has a version - replace it
         if (existingVersion != null && !existingVersion.isEmpty()) {
-            int versionIndex = existingSource.indexOf(existingVersion);
+            // Find the version in the source, handling both plain versions and property references
+            // We need to find the actual version text in the source (which might include ${...} or $...)
+            int versionIndex = findVersionInSource(existingSource, existingVersion);
             if (versionIndex >= 0) {
                 int absoluteStart = existing.getSourceNode().getStartOffset() + versionIndex;
                 int absoluteEnd = absoluteStart + existingVersion.length();
@@ -124,6 +127,47 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
 
         // Case 2: Existing dependency has no version - add it
         return createVersionAdditionEdit(existing, newVersion);
+    }
+
+    /**
+     * Find the version string in the source text.
+     * Handles both plain versions "1.0" and property references "${version}" or "$version".
+     */
+    private int findVersionInSource(@NotNull String source, @NotNull String version) {
+        // First try exact match
+        int index = source.indexOf(version);
+        if (index >= 0) {
+            return index;
+        }
+
+        // Version might be a property reference in the source like ${...} or $...
+        // but parsed as the actual value. Try to find patterns like ${...} or $...
+        // after the second colon in the coordinate
+        int firstColon = source.indexOf(':');
+        if (firstColon >= 0) {
+            int secondColon = source.indexOf(':', firstColon + 1);
+            if (secondColon >= 0) {
+                // Look for the version after the second colon
+                String afterSecondColon = source.substring(secondColon + 1);
+                // Check if there's a property reference pattern
+                if (afterSecondColon.contains("${") || afterSecondColon.startsWith("$")) {
+                    // Find where the property reference ends (before quote, paren, or whitespace)
+                    int endIdx = secondColon + 1;
+                    while (endIdx < source.length()) {
+                        char c = source.charAt(endIdx);
+                        if (c == '\'' || c == '"' || c == ')' || c == ',' || c == ' ' || c == '\t' || c == '\n') {
+                            break;
+                        }
+                        endIdx++;
+                    }
+                    if (endIdx > secondColon + 1) {
+                        return secondColon + 1;
+                    }
+                }
+            }
+        }
+
+        return source.indexOf(version);
     }
 
     @Nullable
@@ -167,12 +211,43 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
             return edits;
         }
 
-        // Find excludes in snippet that don't exist in original
-        List<ExcludeItem> newExcludes = new ArrayList<>();
+        // Strategy: Snippet excludes take priority. We need to:
+        // 1. Add excludes from snippet that aren't covered by existing excludes
+        // 2. Remove existing excludes that conflict with snippet excludes (broader vs narrower)
+
+        // First, identify excludes from snippet that need to be added or replace existing ones
+        List<ExcludeItem> excludesToAdd = new ArrayList<>();
+        List<ExcludeItem> existingExcludesToRemove = new ArrayList<>();
+
         for (ExcludeItem snippetExclude : snippet.getExcludes()) {
-            boolean exists = existing.getExcludes().stream()
-                    .anyMatch(e -> e.matches(snippetExclude));
-            if (!exists) {
+            boolean covered = false;
+            boolean replacesExisting = false;
+
+            for (ExcludeItem existingExclude : existing.getExcludes()) {
+                if (existingExclude.covers(snippetExclude)) {
+                    // Existing exclude already covers this snippet exclude
+                    covered = true;
+                    break;
+                }
+                if (snippetExclude.covers(existingExclude)) {
+                    // Snippet exclude is broader and should replace existing
+                    replacesExisting = true;
+                    existingExcludesToRemove.add(existingExclude);
+                }
+            }
+
+            if (!covered) {
+                excludesToAdd.add(snippetExclude);
+            }
+        }
+
+        // For now, we'll just add new excludes (removing existing excludes is complex and risky)
+        // But we won't add if they're already covered by existing broader excludes
+        List<ExcludeItem> newExcludes = new ArrayList<>();
+        for (ExcludeItem snippetExclude : excludesToAdd) {
+            boolean alreadyCovered = existing.getExcludes().stream()
+                    .anyMatch(e -> e.covers(snippetExclude));
+            if (!alreadyCovered) {
                 newExcludes.add(snippetExclude);
             }
         }
@@ -231,10 +306,39 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
     @NotNull
     private String formatDependencyLine(@NotNull DependencyItem dep, @NotNull MergeContext context) {
         StringBuilder sb = new StringBuilder();
-        sb.append(context.getIndentation());
-        // Use original source text from snippet to preserve notation style (map notation, quotes, etc.)
-        sb.append(dep.getOriginalSourceText());
-        sb.append("\n");
+        String sourceText = dep.getOriginalSourceText();
+
+        // If the dependency has multiple lines (e.g., with excludes), we need to adjust indentation
+        if (sourceText.contains("\n")) {
+            // Multi-line dependency - need to re-indent each line
+            String[] lines = sourceText.split("\n", -1);
+            for (int i = 0; i < lines.length; i++) {
+                if (i > 0) {
+                    sb.append("\n");
+                }
+                String line = lines[i];
+                // Trim leading whitespace and add proper indentation
+                String trimmed = line.trim();
+                if (!trimmed.isEmpty()) {
+                    if (i == 0) {
+                        // First line: base indentation (one level for dependencies block)
+                        sb.append(context.getIndentation()).append(trimmed);
+                    } else if (trimmed.equals("}")) {
+                        // Closing brace: same indentation as opening line
+                        sb.append(context.getIndentation()).append(trimmed);
+                    } else {
+                        // Inner lines (excludes): two levels of indentation
+                        sb.append(context.getIndentation()).append(context.getIndentation()).append(trimmed);
+                    }
+                }
+            }
+            sb.append("\n");
+        } else {
+            // Single-line dependency
+            sb.append(context.getIndentation());
+            sb.append(sourceText);
+            sb.append("\n");
+        }
         return sb.toString();
     }
 

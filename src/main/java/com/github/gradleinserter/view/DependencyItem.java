@@ -19,8 +19,9 @@ import java.util.regex.Pattern;
 public final class DependencyItem {
 
     // Patterns for parsing dependency coordinates
+    // Updated to handle versions with property references like ${version} or $version
     private static final Pattern COORDINATE_PATTERN =
-            Pattern.compile("([^:]+):([^:]+)(?::([^:@]+))?(?:@(.+))?");
+            Pattern.compile("([^:]+):([^:]+)(?::([^:@]+?))?(?:@(.+))?");
 
     @NotNull
     private final String configuration;  // implementation, api, testImplementation, etc.

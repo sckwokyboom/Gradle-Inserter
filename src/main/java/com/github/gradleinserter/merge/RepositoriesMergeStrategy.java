@@ -35,7 +35,8 @@ public class RepositoriesMergeStrategy implements MergeStrategy<RepositoriesView
             // Use semantic insertion point
             int insertPos = context.getSemanticInsertionPoint(SemanticView.ViewType.REPOSITORIES);
             String prefix = insertPos > 0 ? "\n\n" : "";
-            edits.add(new ReplaceEdit(insertPos, insertPos, prefix + newBlock,
+            String suffix = "\n";
+            edits.add(new ReplaceEdit(insertPos, insertPos, prefix + newBlock + suffix,
                     "Add repositories block"));
             return edits;
         }

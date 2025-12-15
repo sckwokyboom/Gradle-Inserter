@@ -35,7 +35,9 @@ public class PluginsMergeStrategy implements MergeStrategy<PluginsView> {
             // No plugins block in original - need to create one at the start
             String newBlock = generatePluginsBlock(snippet, context);
             // Plugins block should be at the beginning of the file
-            edits.add(new ReplaceEdit(0, 0, newBlock + "\n\n",
+            int insertPos = context.getSemanticInsertionPoint(SemanticView.ViewType.PLUGINS);
+            String suffix = (context.getOriginalSource().length() > insertPos) ? "\n\n" : "\n";
+            edits.add(new ReplaceEdit(insertPos, insertPos, newBlock + suffix,
                     "Add plugins block"));
             return edits;
         }
@@ -113,9 +115,10 @@ public class PluginsMergeStrategy implements MergeStrategy<PluginsView> {
     private String formatPluginLine(PluginItem plugin, MergeContext context) {
         StringBuilder sb = new StringBuilder();
         sb.append(context.getIndentation());
-        sb.append("id '").append(plugin.getId()).append("'");
+        String quote = plugin.getQuoteStyle();
+        sb.append("id ").append(quote).append(plugin.getId()).append(quote);
         if (plugin.getVersion() != null) {
-            sb.append(" version '").append(plugin.getVersion()).append("'");
+            sb.append(" version ").append(quote).append(plugin.getVersion()).append(quote);
         }
         if (!plugin.isApply()) {
             sb.append(" apply false");
@@ -130,9 +133,10 @@ public class PluginsMergeStrategy implements MergeStrategy<PluginsView> {
 
         for (PluginItem plugin : snippet.getPlugins()) {
             sb.append("\n").append(context.getIndentation());
-            sb.append("id '").append(plugin.getId()).append("'");
+            String quote = plugin.getQuoteStyle();
+            sb.append("id ").append(quote).append(plugin.getId()).append(quote);
             if (plugin.getVersion() != null) {
-                sb.append(" version '").append(plugin.getVersion()).append("'");
+                sb.append(" version ").append(quote).append(plugin.getVersion()).append(quote);
             }
             if (!plugin.isApply()) {
                 sb.append(" apply false");

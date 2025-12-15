@@ -76,6 +76,44 @@ public final class ExcludeItem {
         return Objects.equals(group, other.group) && Objects.equals(module, other.module);
     }
 
+    /**
+     * Check if this exclude is broader than another (excludes more).
+     * An exclude is broader if it has only group (excludes entire group) vs group+module.
+     */
+    public boolean isBroaderThan(@NotNull ExcludeItem other) {
+        // If I exclude entire group (module==null) and other excludes specific module in same group
+        if (this.module == null && other.module != null && Objects.equals(this.group, other.group)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Check if this exclude is narrower than another (excludes less).
+     * An exclude is narrower if it has group+module vs only group.
+     */
+    public boolean isNarrowerThan(@NotNull ExcludeItem other) {
+        return other.isBroaderThan(this);
+    }
+
+    /**
+     * Check if this exclude covers another (i.e., makes it redundant).
+     * This happens when:
+     * - They match exactly, OR
+     * - This exclude is broader (e.g., excludes whole group while other excludes specific module)
+     */
+    public boolean covers(@NotNull ExcludeItem other) {
+        // Exact match
+        if (matches(other)) {
+            return true;
+        }
+        // This exclude is broader and covers the other
+        if (isBroaderThan(other)) {
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
