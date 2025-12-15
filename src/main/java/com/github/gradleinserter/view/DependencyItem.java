@@ -18,10 +18,7 @@ import java.util.regex.Pattern;
  */
 public final class DependencyItem {
 
-    // Patterns for parsing dependency coordinates
-    // Updated to handle versions with property references like ${version} or $version
-    private static final Pattern COORDINATE_PATTERN =
-            Pattern.compile("([^:]+):([^:]+)(?::([^:@]+?))?(?:@(.+))?");
+    // For parsing dependency coordinates - we'll use manual parsing for complex versions
 
     @NotNull
     private final String configuration;  // implementation, api, testImplementation, etc.
@@ -102,22 +99,125 @@ public final class DependencyItem {
     private static DependencyItem parseStringNotation(@NotNull String config, @NotNull String notation,
                                                       @NotNull MethodCallNode node,
                                                       @NotNull List<ExcludeItem> excludes) {
-        Matcher matcher = COORDINATE_PATTERN.matcher(notation);
-        if (matcher.matches()) {
-            return new DependencyItem(
-                    config,
-                    matcher.group(1),
-                    matcher.group(2),
-                    matcher.group(3),
-                    matcher.group(4),
-                    notation,
-                    node,
-                    excludes
-            );
+        // Parse coordinates manually to handle complex versions like ${version}, $var, etc.
+        ParsedCoordinates coords = parseCoordinates(notation);
+
+        return new DependencyItem(
+                config,
+                coords.group,
+                coords.name,
+                coords.version,
+                coords.classifier,
+                notation,
+                node,
+                excludes
+        );
+    }
+
+    /**
+     * Parse dependency coordinates from string notation.
+     * Handles complex versions like ${version}, $var, ${props['key']}, etc.
+     */
+    @NotNull
+    private static ParsedCoordinates parseCoordinates(@NotNull String notation) {
+        String group = "";
+        String name = "";
+        String version = null;
+        String classifier = null;
+
+        // First, handle classifier (@extension)
+        int atIndex = notation.lastIndexOf('@');
+        String mainPart = notation;
+        if (atIndex >= 0) {
+            classifier = notation.substring(atIndex + 1);
+            mainPart = notation.substring(0, atIndex);
         }
 
-        // Fallback for unparseable notation
-        return new DependencyItem(config, "", notation, null, null, notation, node, excludes);
+        // Split by colons, but be careful with property references
+        // We need to find exactly 2 or 3 parts: group:name or group:name:version
+        int firstColon = mainPart.indexOf(':');
+        if (firstColon < 0) {
+            // No colon - single value (probably just name)
+            name = mainPart;
+            return new ParsedCoordinates(group, name, version, classifier);
+        }
+
+        group = mainPart.substring(0, firstColon);
+        String afterFirstColon = mainPart.substring(firstColon + 1);
+
+        // Find the second colon for version separation
+        int secondColon = findVersionSeparator(afterFirstColon);
+
+        if (secondColon < 0) {
+            // No version - just group:name
+            name = afterFirstColon;
+        } else {
+            name = afterFirstColon.substring(0, secondColon);
+            version = afterFirstColon.substring(secondColon + 1);
+        }
+
+        return new ParsedCoordinates(group, name, version, classifier);
+    }
+
+    /**
+     * Find the colon that separates artifact name from version.
+     * Must handle complex versions that may contain colons inside expressions.
+     */
+    private static int findVersionSeparator(@NotNull String afterGroup) {
+        int braceDepth = 0;
+        int bracketDepth = 0;
+        int parenDepth = 0;
+
+        for (int i = 0; i < afterGroup.length(); i++) {
+            char c = afterGroup.charAt(i);
+
+            switch (c) {
+                case '{':
+                    braceDepth++;
+                    break;
+                case '}':
+                    braceDepth--;
+                    break;
+                case '[':
+                    bracketDepth++;
+                    break;
+                case ']':
+                    bracketDepth--;
+                    break;
+                case '(':
+                    parenDepth++;
+                    break;
+                case ')':
+                    parenDepth--;
+                    break;
+                case ':':
+                    // Only treat as separator if we're not inside any brackets/braces/parens
+                    if (braceDepth == 0 && bracketDepth == 0 && parenDepth == 0) {
+                        return i;
+                    }
+                    break;
+            }
+        }
+
+        return -1;
+    }
+
+    /**
+     * Helper class for parsed coordinates.
+     */
+    private static class ParsedCoordinates {
+        @NotNull final String group;
+        @NotNull final String name;
+        @Nullable final String version;
+        @Nullable final String classifier;
+
+        ParsedCoordinates(@NotNull String group, @NotNull String name,
+                          @Nullable String version, @Nullable String classifier) {
+            this.group = group;
+            this.name = name;
+            this.version = version;
+            this.classifier = classifier;
+        }
     }
 
     @NotNull

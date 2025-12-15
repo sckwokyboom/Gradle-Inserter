@@ -1757,4 +1757,639 @@ class GradleInserterTest {
             assertThat(result).isEqualTo(expected);
         }
     }
+
+    // ==================== COMPLEX VERSION FORMATS ====================
+
+    @Nested
+    @DisplayName("Complex Version Formats")
+    class ComplexVersionFormatsTests {
+
+        @Test
+        @DisplayName("Version with simple property reference ${version}")
+        void versionWithSimplePropertyReference() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:${libVersion}\"\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:2.0.0'\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:2.0.0\"\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Version with complex property reference ${project.version}")
+        void versionWithComplexPropertyReference() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:${project.ext.libVersion}\"\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:3.0.0'\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:3.0.0\"\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Snippet with property reference version replaces literal version")
+        void snippetPropertyReferenceReplacesLiteral() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:${libVersion}\"\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:${libVersion}'\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Version with dollar sign without braces $version")
+        void versionWithDollarNoBraces() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:$libVersion\"\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:2.0.0'\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:2.0.0\"\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Version with nested braces ${props['version']}")
+        void versionWithNestedBraces() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:${props['libVersion']}\"\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:4.0.0'\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:4.0.0\"\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Property reference version with excludes - update version")
+        void propertyReferenceWithExcludesUpdateVersion() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation(\"com.example:lib:${libVersion}\") {\n" +
+                    "        exclude group: 'unwanted'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:5.0.0'\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation(\"com.example:lib:5.0.0\") {\n" +
+                    "        exclude group: 'unwanted'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Property reference version with excludes - add more excludes")
+        void propertyReferenceWithExcludesAddExcludes() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation(\"com.example:lib:${libVersion}\") {\n" +
+                    "        exclude group: 'unwanted1'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation('com.example:lib:${libVersion}') {\n" +
+                    "        exclude group: 'unwanted2', module: 'mod'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("exclude group: 'unwanted1'");
+            assertThat(result).contains("exclude group: 'unwanted2', module: 'mod'");
+        }
+
+        @Test
+        @DisplayName("Add new dependency with property reference version")
+        void addNewDependencyWithPropertyReferenceVersion() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'existing:lib:1.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation \"new:lib:${newLibVersion}\"\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'existing:lib:1.0'\n" +
+                    "    implementation \"new:lib:${newLibVersion}\"\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Dependency with method call in version position")
+        void dependencyWithMethodCallVersion() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:${getVersion()}\"\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:6.0.0'\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:6.0.0\"\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Dependency with concatenated version")
+        void dependencyWithConcatenatedVersion() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:${major}.${minor}.${patch}\"\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:7.0.0'\n" +
+                    "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation \"com.example:lib:7.0.0\"\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+    }
+
+    // ==================== BLOCK SPACING TESTS ====================
+
+    @Nested
+    @DisplayName("Block Spacing")
+    class BlockSpacingTests {
+
+        @Test
+        @DisplayName("New dependencies block should have blank line before it")
+        void newDependenciesBlockHasBlankLineBefore() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            // Should have blank line between plugins and dependencies
+            assertThat(result).doesNotContain("}\n\n\ndependencies {");
+            assertThat(result).contains("}\n\ndependencies {");
+        }
+
+        @Test
+        @DisplayName("New repositories block should have blank line before it")
+        void newRepositoriesBlockHasBlankLineBefore() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String snippet =
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).contains("}\n\nrepositories {");
+        }
+
+        @Test
+        @DisplayName("Multiple new blocks should have proper spacing")
+        void multipleNewBlocksProperSpacing() {
+            String original = "";
+
+            String snippet =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n" +
+                    "\n" +
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            // Blocks should be separated
+            assertThat(result).doesNotContain("}plugins");
+            assertThat(result).doesNotContain("}repositories");
+            assertThat(result).doesNotContain("}dependencies");
+        }
+
+        @Test
+        @DisplayName("Properties and blocks should have proper spacing")
+        void propertiesAndBlocksProperSpacing() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String snippet =
+                    "group = 'com.example'\n" +
+                    "version = '1.0.0'\n";
+
+            String result = inserter.insert(original, snippet);
+            // Properties should be separated from plugins block
+            assertThat(result).doesNotContain("}group");
+        }
+
+        @Test
+        @DisplayName("No triple newlines in output")
+        void noTripleNewlines() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String snippet =
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n" +
+                    "\n" +
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            // Should not have more than 2 consecutive newlines
+            assertThat(result).doesNotContain("\n\n\n");
+        }
+    }
+
+    // ==================== BLOCK ORDERING TESTS ====================
+
+    @Nested
+    @DisplayName("Block Ordering (Gradle Semantics)")
+    class BlockOrderingTests {
+
+        @Test
+        @DisplayName("Plugins block should be first")
+        void pluginsBlockFirst() {
+            String original =
+                    "group = 'com.example'\n" +
+                    "version = '1.0.0'\n";
+
+            String snippet =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+            int pluginsIdx = result.indexOf("plugins {");
+            int groupIdx = result.indexOf("group = ");
+            assertThat(pluginsIdx).isLessThan(groupIdx);
+        }
+
+        @Test
+        @DisplayName("Order: plugins -> properties -> repositories -> dependencies")
+        void correctBlockOrder() {
+            String original = "";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'dep:dep:1.0'\n" +
+                    "}\n" +
+                    "\n" +
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n" +
+                    "\n" +
+                    "group = 'com.example'\n";
+
+            String result = inserter.insert(original, snippet);
+
+            int pluginsIdx = result.indexOf("plugins {");
+            int groupIdx = result.indexOf("group = ");
+            int repositoriesIdx = result.indexOf("repositories {");
+            int dependenciesIdx = result.indexOf("dependencies {");
+
+            // Verify order: plugins < group < repositories < dependencies
+            assertThat(pluginsIdx).isGreaterThanOrEqualTo(0);
+            assertThat(groupIdx).isGreaterThan(pluginsIdx);
+            assertThat(repositoriesIdx).isGreaterThan(groupIdx);
+            assertThat(dependenciesIdx).isGreaterThan(repositoriesIdx);
+        }
+
+        @Test
+        @DisplayName("Properties should come after plugins but before repositories")
+        void propertiesAfterPluginsBeforeRepositories() {
+            String original =
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n";
+
+            String snippet =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "group = 'com.example'\n" +
+                    "version = '1.0.0'\n";
+
+            String result = inserter.insert(original, snippet);
+
+            int pluginsIdx = result.indexOf("plugins {");
+            int groupIdx = result.indexOf("group = ");
+            int versionIdx = result.indexOf("version = ");
+            int repositoriesIdx = result.indexOf("repositories {");
+
+            assertThat(pluginsIdx).isGreaterThanOrEqualTo(0);
+            assertThat(groupIdx).isGreaterThan(pluginsIdx);
+            assertThat(versionIdx).isGreaterThan(pluginsIdx);
+            assertThat(repositoriesIdx).isGreaterThan(groupIdx);
+            assertThat(repositoriesIdx).isGreaterThan(versionIdx);
+        }
+
+        @Test
+        @DisplayName("Adding plugins to script with dependencies should maintain order")
+        void addPluginsToScriptWithDependencies() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'existing:lib:1.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+
+            int pluginsIdx = result.indexOf("plugins {");
+            int dependenciesIdx = result.indexOf("dependencies {");
+
+            assertThat(pluginsIdx).isGreaterThanOrEqualTo(0);
+            assertThat(pluginsIdx).isLessThan(dependenciesIdx);
+        }
+
+        @Test
+        @DisplayName("Adding repositories to script with dependencies should maintain order")
+        void addRepositoriesToScriptWithDependencies() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "dependencies {\n" +
+                    "    implementation 'existing:lib:1.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+
+            int pluginsIdx = result.indexOf("plugins {");
+            int repositoriesIdx = result.indexOf("repositories {");
+            int dependenciesIdx = result.indexOf("dependencies {");
+
+            assertThat(pluginsIdx).isLessThan(repositoriesIdx);
+            assertThat(repositoriesIdx).isLessThan(dependenciesIdx);
+        }
+
+        @Test
+        @DisplayName("Full semantic order with all elements")
+        void fullSemanticOrder() {
+            String original = "";
+
+            // Insert everything in wrong order
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation 'dep:dep:1.0'\n" +
+                    "}\n" +
+                    "\n" +
+                    "version = '1.0.0'\n" +
+                    "\n" +
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n" +
+                    "\n" +
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "group = 'com.example'\n";
+
+            String result = inserter.insert(original, snippet);
+
+            // Extract positions
+            int pluginsIdx = result.indexOf("plugins {");
+            int groupIdx = result.indexOf("group = ");
+            int versionIdx = result.indexOf("version = ");
+            int repositoriesIdx = result.indexOf("repositories {");
+            int dependenciesIdx = result.indexOf("dependencies {");
+
+            // All should be present
+            assertThat(pluginsIdx).isGreaterThanOrEqualTo(0);
+            assertThat(groupIdx).isGreaterThanOrEqualTo(0);
+            assertThat(versionIdx).isGreaterThanOrEqualTo(0);
+            assertThat(repositoriesIdx).isGreaterThanOrEqualTo(0);
+            assertThat(dependenciesIdx).isGreaterThanOrEqualTo(0);
+
+            // Verify semantic order: plugins < group/version < repositories < dependencies
+            assertThat(pluginsIdx).isLessThan(groupIdx);
+            assertThat(pluginsIdx).isLessThan(versionIdx);
+            assertThat(groupIdx).isLessThan(repositoriesIdx);
+            assertThat(versionIdx).isLessThan(repositoriesIdx);
+            assertThat(repositoriesIdx).isLessThan(dependenciesIdx);
+        }
+    }
+
+    // ==================== DEPENDENCY WITH EXCLUDES INDENTATION ====================
+
+    @Nested
+    @DisplayName("Dependency Excludes Indentation")
+    class DependencyExcludesIndentationTests {
+
+        @Test
+        @DisplayName("New dependency with excludes should have correct indentation")
+        void newDependencyWithExcludesCorrectIndentation() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'existing:lib:1.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation('new:lib:2.0') {\n" +
+                    "        exclude group: 'unwanted'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+
+            // Check that excludes are properly indented (8 spaces = 2 levels)
+            assertThat(result).contains("    implementation('new:lib:2.0') {");
+            assertThat(result).contains("        exclude group: 'unwanted'");
+            assertThat(result).contains("    }");
+        }
+
+        @Test
+        @DisplayName("Adding excludes to existing dependency should have correct indentation")
+        void addExcludesToExistingCorrectIndentation() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation('com.example:lib:1.0') {\n" +
+                    "        exclude group: 'unwanted', module: 'mod'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+
+            // The exclude should be added with proper indentation
+            String[] lines = result.split("\n");
+            for (String line : lines) {
+                if (line.contains("exclude group:")) {
+                    // Should have 8 spaces (2 levels of indentation)
+                    assertThat(line).startsWith("        ");
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("Multiple excludes should all have correct indentation")
+        void multipleExcludesCorrectIndentation() {
+            String original =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation('com.example:lib:1.0') {\n" +
+                    "        exclude group: 'unwanted1'\n" +
+                    "        exclude group: 'unwanted2', module: 'mod2'\n" +
+                    "        exclude module: 'unwanted3'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+
+            String[] lines = result.split("\n");
+            int excludeCount = 0;
+            for (String line : lines) {
+                if (line.contains("exclude ")) {
+                    excludeCount++;
+                    // Each exclude should have 8 spaces
+                    assertThat(line).startsWith("        ");
+                }
+            }
+            assertThat(excludeCount).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("Dependency with excludes in new dependencies block")
+        void dependencyWithExcludesInNewBlock() {
+            String original =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                    "    implementation('com.example:lib:1.0') {\n" +
+                    "        exclude group: 'unwanted'\n" +
+                    "    }\n" +
+                    "}\n";
+
+            String result = inserter.insert(original, snippet);
+
+            assertThat(result).contains("dependencies {");
+            assertThat(result).contains("    implementation('com.example:lib:1.0') {");
+            assertThat(result).contains("        exclude group: 'unwanted'");
+            assertThat(result).contains("    }");
+        }
+    }
 }

@@ -113,10 +113,10 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
         if (existingVersion != null && !existingVersion.isEmpty()) {
             // Find the version in the source, handling both plain versions and property references
             // We need to find the actual version text in the source (which might include ${...} or $...)
-            int versionIndex = findVersionInSource(existingSource, existingVersion);
-            if (versionIndex >= 0) {
-                int absoluteStart = existing.getSourceNode().getStartOffset() + versionIndex;
-                int absoluteEnd = absoluteStart + existingVersion.length();
+            VersionLocation versionLoc = findVersionInSource(existingSource, existingVersion);
+            if (versionLoc != null) {
+                int absoluteStart = existing.getSourceNode().getStartOffset() + versionLoc.startIndex;
+                int absoluteEnd = absoluteStart + versionLoc.length;
 
                 return new ReplaceEdit(absoluteStart, absoluteEnd, newVersion,
                         "Update version: " + existing.getCoordinateKey()
@@ -130,44 +130,162 @@ public class DependenciesMergeStrategy implements MergeStrategy<DependenciesView
     }
 
     /**
-     * Find the version string in the source text.
-     * Handles both plain versions "1.0" and property references "${version}" or "$version".
+     * Find the version position and length in the source text.
+     * Handles both plain versions "1.0" and property references "${version}", "$version", etc.
+     *
+     * @return VersionLocation with start index and length, or null if not found
      */
-    private int findVersionInSource(@NotNull String source, @NotNull String version) {
+    @Nullable
+    private VersionLocation findVersionInSource(@NotNull String source, @NotNull String version) {
         // First try exact match
         int index = source.indexOf(version);
         if (index >= 0) {
-            return index;
+            return new VersionLocation(index, version.length());
         }
 
-        // Version might be a property reference in the source like ${...} or $...
-        // but parsed as the actual value. Try to find patterns like ${...} or $...
-        // after the second colon in the coordinate
-        int firstColon = source.indexOf(':');
-        if (firstColon >= 0) {
-            int secondColon = source.indexOf(':', firstColon + 1);
-            if (secondColon >= 0) {
-                // Look for the version after the second colon
-                String afterSecondColon = source.substring(secondColon + 1);
-                // Check if there's a property reference pattern
-                if (afterSecondColon.contains("${") || afterSecondColon.startsWith("$")) {
-                    // Find where the property reference ends (before quote, paren, or whitespace)
-                    int endIdx = secondColon + 1;
-                    while (endIdx < source.length()) {
-                        char c = source.charAt(endIdx);
-                        if (c == '\'' || c == '"' || c == ')' || c == ',' || c == ' ' || c == '\t' || c == '\n') {
-                            break;
-                        }
-                        endIdx++;
-                    }
-                    if (endIdx > secondColon + 1) {
-                        return secondColon + 1;
-                    }
-                }
+        // Version is complex - find it by locating the version position in the coordinate string
+        // Look for the second colon that separates artifactId from version
+        int versionStart = findVersionStartInSource(source);
+        if (versionStart >= 0) {
+            int versionEnd = findVersionEndInSource(source, versionStart);
+            if (versionEnd > versionStart) {
+                return new VersionLocation(versionStart, versionEnd - versionStart);
             }
         }
 
-        return source.indexOf(version);
+        return null;
+    }
+
+    /**
+     * Find where the version starts in the source (after the second colon).
+     */
+    private int findVersionStartInSource(@NotNull String source) {
+        int colonCount = 0;
+        int braceDepth = 0;
+        int bracketDepth = 0;
+        int parenDepth = 0;
+
+        for (int i = 0; i < source.length(); i++) {
+            char c = source.charAt(i);
+
+            switch (c) {
+                case '{':
+                    braceDepth++;
+                    break;
+                case '}':
+                    braceDepth--;
+                    break;
+                case '[':
+                    bracketDepth++;
+                    break;
+                case ']':
+                    bracketDepth--;
+                    break;
+                case '(':
+                    parenDepth++;
+                    break;
+                case ')':
+                    parenDepth--;
+                    break;
+                case ':':
+                    if (braceDepth == 0 && bracketDepth == 0 && parenDepth == 0) {
+                        colonCount++;
+                        if (colonCount == 2) {
+                            return i + 1; // Start right after the second colon
+                        }
+                    }
+                    break;
+            }
+        }
+
+        return -1;
+    }
+
+    /**
+     * Find where the version ends in the source.
+     * Must handle nested expressions like ${props['key']}.
+     *
+     * Strategy: Track depth of braces/brackets/parens. The version ends when we hit
+     * a quote, closing paren at depth 0, or classifier marker.
+     */
+    private int findVersionEndInSource(@NotNull String source, int versionStart) {
+        int braceDepth = 0;
+        int bracketDepth = 0;
+        int parenDepth = 0;
+        boolean inDollarExpr = false;
+
+        for (int i = versionStart; i < source.length(); i++) {
+            char c = source.charAt(i);
+
+            // Track $ expressions
+            if (c == '$' && i + 1 < source.length()) {
+                char next = source.charAt(i + 1);
+                if (next == '{') {
+                    inDollarExpr = true;
+                }
+            }
+
+            switch (c) {
+                case '{':
+                    braceDepth++;
+                    break;
+                case '}':
+                    if (braceDepth > 0) {
+                        braceDepth--;
+                        if (braceDepth == 0 && inDollarExpr) {
+                            inDollarExpr = false;
+                        }
+                    }
+                    break;
+                case '[':
+                    bracketDepth++;
+                    break;
+                case ']':
+                    if (bracketDepth > 0) {
+                        bracketDepth--;
+                    }
+                    break;
+                case '(':
+                    parenDepth++;
+                    break;
+                case ')':
+                    if (parenDepth > 0) {
+                        parenDepth--;
+                    } else {
+                        // End of version - found closing paren of dependency notation
+                        return i;
+                    }
+                    break;
+                case '\'':
+                case '"':
+                    // End of version - found closing quote
+                    if (braceDepth == 0 && bracketDepth == 0 && parenDepth == 0) {
+                        return i;
+                    }
+                    break;
+                case '@':
+                    // Classifier separator
+                    if (braceDepth == 0 && bracketDepth == 0 && parenDepth == 0) {
+                        return i;
+                    }
+                    break;
+            }
+        }
+
+        return source.length();
+    }
+
+    /**
+     * Helper class for version location in source.
+     */
+    private static class VersionLocation {
+        final int startIndex;
+        final int length;
+
+        VersionLocation(int startIndex, int length) {
+            this.startIndex = startIndex;
+            this.length = length;
+        }
     }
 
     @Nullable

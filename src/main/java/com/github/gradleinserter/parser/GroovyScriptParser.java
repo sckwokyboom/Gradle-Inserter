@@ -288,13 +288,19 @@ public class GroovyScriptParser implements ScriptParser {
         return method.getText();
     }
 
+    /**
+     * Extract the value of an argument expression.
+     * For GStrings, we need to reconstruct the original text with ${} syntax since
+     * Groovy's getText() returns simplified form without braces.
+     */
     private String extractArgumentValue(Expression expr) {
         if (expr instanceof ConstantExpression) {
             Object value = ((ConstantExpression) expr).getValue();
             return value != null ? value.toString() : "";
         }
         if (expr instanceof GStringExpression) {
-            return ((GStringExpression) expr).getText();
+            // GStringExpression.getText() doesn't preserve ${} braces, so we need to reconstruct
+            return reconstructGString((GStringExpression) expr);
         }
         if (expr instanceof MethodCallExpression) {
             // For calls like project(':core')
@@ -307,6 +313,30 @@ public class GroovyScriptParser implements ScriptParser {
             return extractNamedArguments((NamedArgumentListExpression) expr);
         }
         return expr.getText();
+    }
+
+    /**
+     * Reconstruct a GString preserving the ${} syntax for interpolations.
+     * GString structure: strings[0] + values[0] + strings[1] + values[1] + ... + strings[n]
+     */
+    private String reconstructGString(GStringExpression gstring) {
+        List<ConstantExpression> strings = gstring.getStrings();
+        List<Expression> values = gstring.getValues();
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < strings.size(); i++) {
+            // Add string part
+            Object strValue = strings.get(i).getValue();
+            if (strValue != null) {
+                sb.append(strValue);
+            }
+            // Add interpolated value with ${} syntax
+            if (i < values.size()) {
+                Expression valExpr = values.get(i);
+                sb.append("${").append(valExpr.getText()).append("}");
+            }
+        }
+        return sb.toString();
     }
 
     private String extractMapExpression(MapExpression mapExpr) {

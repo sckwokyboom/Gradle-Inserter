@@ -77,6 +77,10 @@ public final class GradleInserter {
         // Analyze and parse snippet (may contain partial/unwrapped content)
         List<SemanticView> snippetViews = snippetAnalyzer.analyze(snippet);
 
+        // Sort snippet views by semantic order to ensure correct insertion order
+        // Order: PLUGINS -> PROPERTY -> REPOSITORIES -> DEPENDENCIES -> others
+        snippetViews = sortViewsBySemanticOrder(snippetViews);
+
         // Create merge context
         MergeContext context = new MergeContext(originalScript, originalViews);
 
@@ -90,14 +94,15 @@ public final class GradleInserter {
         }
 
         // Sort edits by offset (descending) so they can be applied from end to start
-        // When offsets are equal, maintain original order (stable sort with index)
+        // When offsets are equal, later indexed items should come first (so they get inserted
+        // after earlier ones at the same position - this maintains semantic order)
         List<IndexedEdit> indexed = new ArrayList<>();
         for (int i = 0; i < allEdits.size(); i++) {
             indexed.add(new IndexedEdit(allEdits.get(i), i));
         }
         indexed.sort(Comparator
                 .comparingInt((IndexedEdit e) -> e.edit.getStartOffset()).reversed()
-                .thenComparingInt(e -> -e.index)); // Later additions first at same position
+                .thenComparingInt(e -> -e.index)); // Higher index first at same position
 
         allEdits.clear();
         for (IndexedEdit ie : indexed) {
@@ -124,6 +129,33 @@ public final class GradleInserter {
 
         for (IInsertionEdit edit : sortedEdits) {
             result.replace(edit.getStartOffset(), edit.getEndOffset(), edit.getText());
+        }
+
+        // Normalize newlines: replace 3+ consecutive newlines with 2
+        return normalizeNewlines(result.toString());
+    }
+
+    /**
+     * Normalize excessive newlines in the output.
+     * Replace 3+ consecutive newlines with exactly 2 (one blank line).
+     */
+    @NotNull
+    private String normalizeNewlines(@NotNull String text) {
+        StringBuilder result = new StringBuilder();
+        int newlineCount = 0;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n') {
+                newlineCount++;
+                if (newlineCount <= 2) {
+                    result.append(c);
+                }
+                // Skip if more than 2 newlines
+            } else {
+                newlineCount = 0;
+                result.append(c);
+            }
         }
 
         return result.toString();
@@ -181,6 +213,40 @@ public final class GradleInserter {
         }
 
         return Collections.emptyList();
+    }
+
+    /**
+     * Sort views by Gradle semantic order.
+     * Order: PLUGINS -> PROPERTY -> REPOSITORIES -> DEPENDENCIES -> others (UNKNOWN_BLOCK, RAW)
+     */
+    @NotNull
+    private List<SemanticView> sortViewsBySemanticOrder(@NotNull List<SemanticView> views) {
+        List<SemanticView> sorted = new ArrayList<>(views);
+        sorted.sort(Comparator.comparingInt(this::getSemanticOrder));
+        return sorted;
+    }
+
+    /**
+     * Get semantic ordering priority for a view type.
+     * Lower numbers come first.
+     */
+    private int getSemanticOrder(@NotNull SemanticView view) {
+        switch (view.getType()) {
+            case PLUGINS:
+                return 0;
+            case PROPERTY:
+                return 1;
+            case REPOSITORIES:
+                return 2;
+            case DEPENDENCIES:
+                return 3;
+            case UNKNOWN_BLOCK:
+                return 4;
+            case RAW:
+                return 5;
+            default:
+                return 10;
+        }
     }
 
     /**
