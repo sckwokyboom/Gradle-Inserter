@@ -1,11 +1,10 @@
 package com.github.gradleinserter.view;
 
+import com.github.gradleinserter.parser.ASTArgumentParser;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Represents an exclude declaration within a dependency.
@@ -27,31 +26,26 @@ public final class ExcludeItem {
     }
 
     /**
-     * Parse an exclude item from source text.
+     * Parse an exclude item from source text using AST-based parsing.
      * Handles formats like:
      * - exclude group: 'com.example', module: 'some-module'
      * - exclude group: "com.example"
      * - exclude module: 'some-module'
+     * - exclude group: ${groupVar}, module: ${moduleVar}
+     * - exclude group: $groupVar
      */
     @NotNull
     public static ExcludeItem parse(@NotNull String source) {
-        String group = extractMapValue(source, "group");
-        String module = extractMapValue(source, "module");
+        // Use AST-based parser to extract group and module
+        String[] parsed = ASTArgumentParser.parseExcludeStatement(source);
+        String group = parsed[0];
+        String module = parsed[1];
+
         return new ExcludeItem(
-                group.isEmpty() ? null : group,
-                module.isEmpty() ? null : module,
+                group != null && !group.isEmpty() ? group : null,
+                module != null && !module.isEmpty() ? module : null,
                 source.trim()
         );
-    }
-
-    @NotNull
-    private static String extractMapValue(@NotNull String source, @NotNull String key) {
-        Pattern pattern = Pattern.compile(key + "\\s*:\\s*['\"]([^'\"]+)['\"]");
-        Matcher matcher = pattern.matcher(source);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-        return "";
     }
 
     @Nullable

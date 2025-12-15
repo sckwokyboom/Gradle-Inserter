@@ -2,6 +2,7 @@ package com.github.gradleinserter.view;
 
 import com.github.gradleinserter.ir.IRNode;
 import com.github.gradleinserter.ir.MethodCallNode;
+import com.github.gradleinserter.parser.ASTArgumentParser;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -9,8 +10,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Represents a single dependency declaration.
@@ -85,14 +84,73 @@ public final class DependencyItem {
             return excludes;
         }
 
-        // Pattern to find exclude statements
-        Pattern excludePattern = Pattern.compile("exclude\\s+[^\\n]+", Pattern.MULTILINE);
-        Matcher matcher = excludePattern.matcher(source);
-        while (matcher.find()) {
-            excludes.add(ExcludeItem.parse(matcher.group()));
+        // Parse exclude statements manually by finding "exclude" keywords
+        // This is more robust than regex for handling complex expressions
+        int pos = 0;
+        while (pos < source.length()) {
+            int excludeIdx = source.indexOf("exclude", pos);
+            if (excludeIdx < 0) {
+                break;
+            }
+
+            // Find the end of this exclude statement (either newline or closing brace)
+            int endIdx = findExcludeStatementEnd(source, excludeIdx);
+            String excludeStmt = source.substring(excludeIdx, endIdx);
+
+            excludes.add(ExcludeItem.parse(excludeStmt));
+            pos = endIdx;
         }
 
         return excludes;
+    }
+
+    /**
+     * Find the end of an exclude statement, handling nested braces and brackets.
+     */
+    private static int findExcludeStatementEnd(@NotNull String source, int startIdx) {
+        int pos = startIdx + "exclude".length();
+        int braceDepth = 0;
+        int bracketDepth = 0;
+        int parenDepth = 0;
+
+        while (pos < source.length()) {
+            char c = source.charAt(pos);
+
+            switch (c) {
+                case '{':
+                    braceDepth++;
+                    break;
+                case '}':
+                    braceDepth--;
+                    if (braceDepth < 0) {
+                        // End of closure body
+                        return pos;
+                    }
+                    break;
+                case '[':
+                    bracketDepth++;
+                    break;
+                case ']':
+                    bracketDepth--;
+                    break;
+                case '(':
+                    parenDepth++;
+                    break;
+                case ')':
+                    parenDepth--;
+                    break;
+                case '\n':
+                    // End of statement if not inside nested structures
+                    if (braceDepth == 0 && bracketDepth == 0 && parenDepth == 0) {
+                        return pos;
+                    }
+                    break;
+            }
+
+            pos++;
+        }
+
+        return pos;
     }
 
     @NotNull
@@ -224,21 +282,12 @@ public final class DependencyItem {
     private static DependencyItem parseMapNotation(@NotNull String config, @NotNull String notation,
                                                    @NotNull MethodCallNode node,
                                                    @NotNull List<ExcludeItem> excludes) {
-        String group = extractMapValue(notation, "group");
-        String name = extractMapValue(notation, "name");
-        String version = extractMapValue(notation, "version");
+        // Use AST-based parser to extract map values
+        String group = ASTArgumentParser.extractMapKey(notation, "group");
+        String name = ASTArgumentParser.extractMapKey(notation, "name");
+        String version = ASTArgumentParser.extractMapKey(notation, "version");
 
         return new DependencyItem(config, group, name, version, null, notation, node, excludes);
-    }
-
-    @NotNull
-    private static String extractMapValue(@NotNull String notation, @NotNull String key) {
-        Pattern pattern = Pattern.compile(key + "\\s*:\\s*['\"]?([^'\"\\s,]+)['\"]?");
-        Matcher matcher = pattern.matcher(notation);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-        return "";
     }
 
     @NotNull

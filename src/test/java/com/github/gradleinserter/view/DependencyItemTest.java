@@ -112,6 +112,127 @@ class DependencyItemTest {
         assertThat(updated.getConfiguration()).isEqualTo(item.getConfiguration());
     }
 
+    @Test
+    @DisplayName("Should parse dependency with simple GString version")
+    void parseWithGStringVersion() {
+        MethodCallNode node = createMethodCall("implementation",
+                "com.example:library:${version}");
+
+        DependencyItem item = DependencyItem.fromMethodCall(node);
+
+        assertThat(item.getGroup()).isEqualTo("com.example");
+        assertThat(item.getName()).isEqualTo("library");
+        assertThat(item.getVersion()).isEqualTo("${version}");
+    }
+
+    @Test
+    @DisplayName("Should parse dependency with nested GString version")
+    void parseWithNestedGStringVersion() {
+        MethodCallNode node = createMethodCall("implementation",
+                "com.example:library:${{{version}}}");
+
+        DependencyItem item = DependencyItem.fromMethodCall(node);
+
+        assertThat(item.getGroup()).isEqualTo("com.example");
+        assertThat(item.getName()).isEqualTo("library");
+        assertThat(item.getVersion()).isEqualTo("${{{version}}}");
+    }
+
+    @Test
+    @DisplayName("Should parse dependency with complex property reference")
+    void parseWithComplexPropertyReference() {
+        MethodCallNode node = createMethodCall("implementation",
+                "com.example:library:${props['version.key']}");
+
+        DependencyItem item = DependencyItem.fromMethodCall(node);
+
+        assertThat(item.getGroup()).isEqualTo("com.example");
+        assertThat(item.getName()).isEqualTo("library");
+        assertThat(item.getVersion()).isEqualTo("${props['version.key']}");
+    }
+
+    @Test
+    @DisplayName("Should parse dependency with multiple colons in version")
+    void parseWithMultipleColonsInVersion() {
+        MethodCallNode node = createMethodCall("implementation",
+                "com.example:library:${props['group:name:version']}");
+
+        DependencyItem item = DependencyItem.fromMethodCall(node);
+
+        assertThat(item.getGroup()).isEqualTo("com.example");
+        assertThat(item.getName()).isEqualTo("library");
+        assertThat(item.getVersion()).isEqualTo("${props['group:name:version']}");
+    }
+
+    @Test
+    @DisplayName("Should parse dependency with exclude block")
+    void parseWithExcludeBlock() {
+        String closureSource = "{\n    exclude group: 'org.apache', module: 'commons-io'\n}";
+        MethodCallNode node = createMethodCallWithClosure(
+                "implementation",
+                "com.example:library:1.0.0",
+                closureSource
+        );
+
+        DependencyItem item = DependencyItem.fromMethodCall(node);
+
+        assertThat(item.getGroup()).isEqualTo("com.example");
+        assertThat(item.getName()).isEqualTo("library");
+        assertThat(item.getVersion()).isEqualTo("1.0.0");
+        assertThat(item.hasExcludes()).isTrue();
+        assertThat(item.getExcludes()).hasSize(1);
+
+        ExcludeItem exclude = item.getExcludes().get(0);
+        assertThat(exclude.getGroup()).isEqualTo("org.apache");
+        assertThat(exclude.getModule()).isEqualTo("commons-io");
+    }
+
+    @Test
+    @DisplayName("Should parse dependency with multiple exclude blocks")
+    void parseWithMultipleExcludeBlocks() {
+        String closureSource = "{\n" +
+                "    exclude group: 'org.apache', module: 'commons-io'\n" +
+                "    exclude group: 'com.google.guava', module: 'guava'\n" +
+                "}";
+        MethodCallNode node = createMethodCallWithClosure(
+                "implementation",
+                "com.example:library:1.0.0",
+                closureSource
+        );
+
+        DependencyItem item = DependencyItem.fromMethodCall(node);
+
+        assertThat(item.hasExcludes()).isTrue();
+        assertThat(item.getExcludes()).hasSize(2);
+
+        ExcludeItem exclude1 = item.getExcludes().get(0);
+        assertThat(exclude1.getGroup()).isEqualTo("org.apache");
+        assertThat(exclude1.getModule()).isEqualTo("commons-io");
+
+        ExcludeItem exclude2 = item.getExcludes().get(1);
+        assertThat(exclude2.getGroup()).isEqualTo("com.google.guava");
+        assertThat(exclude2.getModule()).isEqualTo("guava");
+    }
+
+    @Test
+    @DisplayName("Should parse dependency with GString in exclude block")
+    void parseWithGStringInExcludeBlock() {
+        String closureSource = "{\n    exclude group: ${excludeGroup}, module: ${excludeModule}\n}";
+        MethodCallNode node = createMethodCallWithClosure(
+                "implementation",
+                "com.example:library:1.0.0",
+                closureSource
+        );
+
+        DependencyItem item = DependencyItem.fromMethodCall(node);
+
+        assertThat(item.hasExcludes()).isTrue();
+        assertThat(item.getExcludes()).hasSize(1);
+
+        // GString expressions in excludes are complex and would be evaluated at runtime in Gradle
+        // We just verify the exclude statement is detected
+    }
+
     private MethodCallNode createMethodCall(String methodName, String argument) {
         return new MethodCallNode(
                 methodName,
@@ -119,6 +240,19 @@ class DependencyItemTest {
                 null,
                 0, 50,
                 methodName + " '" + argument + "'"
+        );
+    }
+
+    private MethodCallNode createMethodCallWithClosure(String methodName, String argument, String closureSource) {
+        com.github.gradleinserter.ir.RawNode closureBody =
+                new com.github.gradleinserter.ir.RawNode(0, closureSource.length(), closureSource);
+
+        return new MethodCallNode(
+                methodName,
+                List.of(argument),
+                closureBody,
+                0, 50 + closureSource.length(),
+                methodName + " '" + argument + "' " + closureSource
         );
     }
 }

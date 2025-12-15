@@ -1,18 +1,15 @@
 package com.github.gradleinserter.view;
 
 import com.github.gradleinserter.ir.MethodCallNode;
+import com.github.gradleinserter.parser.ASTArgumentParser;
 
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Represents a single plugin declaration.
  * Example: id 'java-library' version '1.0'
  */
 public final class PluginItem {
-
-    private static final Pattern VERSION_PATTERN = Pattern.compile("version\\s*['\"]([^'\"]+)['\"]");
 
     private final String id;
     private final String version;  // may be null
@@ -49,10 +46,9 @@ public final class PluginItem {
             // Detect quote style from source
             quoteStyle = detectQuoteStyle(source);
 
-            Matcher matcher = VERSION_PATTERN.matcher(source);
-            if (matcher.find()) {
-                version = matcher.group(1);
-            }
+            // Use AST-based parser to extract version
+            version = ASTArgumentParser.extractPluginVersion(source);
+
             if (source.contains("apply false")) {
                 apply = false;
             }
