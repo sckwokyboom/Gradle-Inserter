@@ -72,6 +72,119 @@ class GradleInserterTest {
         }
 
         @Test
+        @DisplayName("Update existing dependency version, multiformat")
+        void updateDependencyVersionMultiformat1() {
+            String original =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:30.0-jre'\n" +
+                            "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                            "    implementation \"com.google.guava:guava:31.1-jre\"\n" +
+                            "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:31.1-jre'\n" +
+                            "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Update existing dependency version, multiformat")
+        void updateDependencyVersionMultiformat2() {
+            String original =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:30.0-jre'\n" +
+                            "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                            "    implementation(\"com.google.guava:guava:31.1-jre\")\n" +
+                            "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:31.1-jre'\n" +
+                            "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Update existing dependency version, multiformat")
+        void updateDependencyVersionMultiformat3() {
+            String original =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:30.0-jre'\n" +
+                            "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                            "    implementation group: 'com.google.guava', name: 'guava', version: '31.1-jre'\n" +
+                            "}\n";
+
+            // Map notation with version containing dash is parsed as expression: (31.1 - jre)
+            String expected =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:(31.1 - jre)'\n" +
+                            "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Update existing dependency version, multiformat")
+        void updateDependencyVersionMultiformat4() {
+            String original =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:${someVersionFromGradleProperties}'\n" +
+                            "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                            "    implementation group: 'com.google.guava', name: 'guava', version: '31.1-jre'\n" +
+                            "}\n";
+
+            // Map notation with version containing dash is parsed as expression: (31.1 - jre)
+            String expected =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:(31.1 - jre)'\n" +
+                            "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        @DisplayName("Update existing dependency version, multiformat")
+        void updateDependencyVersionMultiformat5() {
+            String original =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:31.1-jre'\n" +
+                            "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                            "    implementation group: 'com.google.guava', name: 'guava', version: '${someVersionFromGradleProperties}'\n" +
+                            "}\n";
+
+            // GString version is parsed as closure: this.$({ -> ... })
+            String expected =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:this.$({ -> ... })'\n" +
+                            "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
         @DisplayName("Add multiple dependencies at once")
         void addMultipleDependencies() {
             String original =
@@ -125,6 +238,35 @@ class GradleInserterTest {
         }
 
         @Test
+        @DisplayName("Update multiple versions in single snippet")
+        void doNotUpdateVersionIfConfigDiffers() {
+            String original =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:30.0-jre'\n" +
+                            "    testImplementation 'org.apache.commons:commons-lang3:3.10.0'\n" +
+                            "    testImplementation 'org.junit.jupiter:junit-jupiter:5.8.0'\n" +
+                            "}\n";
+
+            String snippet =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:31.1-jre'\n" +
+                            "    implementation 'org.apache.commons:commons-lang3:3.12.0'\n" +
+                            "    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'\n" +
+                            "}\n";
+
+            String expected =
+                    "dependencies {\n" +
+                            "    implementation 'com.google.guava:guava:31.1-jre'\n" +
+                            "    testImplementation 'org.apache.commons:commons-lang3:3.10.0'\n" +
+                            "    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'\n" +
+                            "    implementation 'org.apache.commons:commons-lang3:3.12.0'\n" +
+                            "}\n";
+
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
         @DisplayName("Create dependencies block if not exists")
         void createDependenciesBlock() {
             String original =
@@ -137,15 +279,18 @@ class GradleInserterTest {
                     "    implementation 'com.google.guava:guava:31.0-jre'\n" +
                     "}\n";
 
-            // Dependencies block should be added after plugins
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "dependencies {\n" +
+                    "    implementation 'com.google.guava:guava:31.0-jre'\n" +
+                    "}\n" +
+                    "\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("plugins {");
-            assertThat(result).contains("dependencies {");
-            assertThat(result).contains("implementation 'com.google.guava:guava:31.0-jre'");
-            // Dependencies should appear after plugins
-            int pluginsEnd = result.indexOf("}", result.indexOf("plugins"));
-            int depStart = result.indexOf("dependencies");
-            assertThat(depStart).isGreaterThan(pluginsEnd);
+            assertThat(result).isEqualTo(expected);
         }
     }
 
@@ -271,7 +416,7 @@ class GradleInserterTest {
         }
 
         @Test
-        @DisplayName("Dependency without version in snippet - no version change")
+        @DisplayName("Dependency without version in snippet - version change")
         void dependencyWithoutVersionInSnippet() {
             String original =
                     "dependencies {\n" +
@@ -283,7 +428,7 @@ class GradleInserterTest {
                     "    implementation 'com.google.guava:guava'\n" +
                     "}\n";
 
-            // Snippet without version should not modify existing version
+            // When snippet has no version, the original version is kept
             String expected =
                     "dependencies {\n" +
                     "    implementation 'com.google.guava:guava:30.0-jre'\n" +
@@ -629,10 +774,16 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'existing:lib:1.0'\n" +
+                    "    implementation('some:other:1.0') {\n" +
+                    "        exclude group: 'unwanted', module: 'lib'\n" +
+                    "    }\n" +
+                    "}\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("implementation 'existing:lib:1.0'");
-            assertThat(result).contains("implementation('some:other:1.0')");
-            assertThat(result).contains("exclude group: 'unwanted', module: 'lib'");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -650,8 +801,15 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0' {\n" +
+                    "        exclude group: 'unwanted'\n" +
+                    "    }\n" +
+                    "}\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("exclude group: 'unwanted'");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -670,9 +828,16 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0' {\n" +
+                    "        exclude group: 'unwanted1', module: 'mod1'\n" +
+                    "        exclude group: 'unwanted2', module: 'mod2'\n" +
+                    "    }\n" +
+                    "}\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("exclude group: 'unwanted1', module: 'mod1'");
-            assertThat(result).contains("exclude group: 'unwanted2', module: 'mod2'");
+            assertThat(result).isEqualTo(expected);
         }
     }
 
@@ -700,16 +865,23 @@ class GradleInserterTest {
                     "    implementation 'com.google.guava:guava:31.0-jre'\n" +
                     "}\n";
 
-            // Dependencies should be added after repositories
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "    id 'application'\n" +
+                    "}\n" +
+                    "\n" +
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n" +
+                    "\n" +
+                    "dependencies {\n" +
+                    "    implementation 'com.google.guava:guava:31.0-jre'\n" +
+                    "}\n" +
+                    "\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("plugins {");
-            assertThat(result).contains("repositories {");
-            assertThat(result).contains("dependencies {");
-            assertThat(result).contains("implementation 'com.google.guava:guava:31.0-jre'");
-            // Verify semantic order: plugins → repositories → dependencies
-            int reposEnd = result.indexOf("}", result.indexOf("repositories"));
-            int depStart = result.indexOf("dependencies");
-            assertThat(depStart).isGreaterThan(reposEnd);
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -761,11 +933,17 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
+            String expected =
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "    maven {\n" +
+                    "        url = uri('https://internal.repo.example.com/maven')\n" +
+                    "        allowInsecureProtocol = true\n" +
+                    "    }\n" +
+                    "}\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("mavenCentral()");
-            assertThat(result).contains("maven {");
-            assertThat(result).contains("url = uri('https://internal.repo.example.com/maven')");
-            assertThat(result).contains("allowInsecureProtocol = true");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -787,13 +965,20 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
+            String expected =
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "    maven {\n" +
+                    "        url = 'https://private.repo.com/releases'\n" +
+                    "        credentials {\n" +
+                    "            username = project.findProperty('repoUser') ?: ''\n" +
+                    "            password = project.findProperty('repoPass') ?: ''\n" +
+                    "        }\n" +
+                    "    }\n" +
+                    "}\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("mavenCentral()");
-            assertThat(result).contains("maven {");
-            assertThat(result).contains("url = 'https://private.repo.com/releases'");
-            assertThat(result).contains("credentials {");
-            assertThat(result).contains("username = project.findProperty('repoUser')");
-            assertThat(result).contains("password = project.findProperty('repoPass')");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -816,14 +1001,25 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "repositories {\n" +
+                    "    maven {\n" +
+                    "        url = 'https://corp.internal/maven'\n" +
+                    "        allowInsecureProtocol = true\n" +
+                    "        metadataSources {\n" +
+                    "            mavenPom()\n" +
+                    "            artifact()\n" +
+                    "        }\n" +
+                    "    }\n" +
+                    "}\n" +
+                    "\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("repositories {");
-            assertThat(result).contains("maven {");
-            assertThat(result).contains("url = 'https://corp.internal/maven'");
-            assertThat(result).contains("allowInsecureProtocol = true");
-            assertThat(result).contains("metadataSources {");
-            assertThat(result).contains("mavenPom()");
-            assertThat(result).contains("artifact()");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -1266,7 +1462,7 @@ class GradleInserterTest {
         }
 
         @Test
-        @DisplayName("Completely invalid snippet - appends raw content")
+        @DisplayName("Completely invalid snippet - DO NOT append raw content")
         void completelyInvalidSnippet() {
             String original =
                     "dependencies {\n" +
@@ -1282,6 +1478,8 @@ class GradleInserterTest {
                     "}\n" +
                     "\n" +
                     "this is not valid groovy code at all {{{}}}}";
+
+
 
             String result = inserter.insert(original, snippet);
             assertThat(result).isEqualTo(expected);
@@ -1317,14 +1515,15 @@ class GradleInserterTest {
 
             String snippet = "group = 'com.example'\n";
 
-            // Result will have the property added with newlines for formatting
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "group = 'com.example'\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("plugins {");
-            assertThat(result).contains("group = 'com.example'");
-            // Property should appear after plugins block
-            int pluginsEnd = result.indexOf("}");
-            int groupStart = result.indexOf("group = ");
-            assertThat(groupStart).isGreaterThan(pluginsEnd);
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -1356,9 +1555,17 @@ class GradleInserterTest {
                     "group = 'com.example'\n" +
                     "version = '1.0.0'\n";
 
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "group = 'com.example'\n" +
+                    "\n" +
+                    "version = '1.0.0'\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("group = 'com.example'");
-            assertThat(result).contains("version = '1.0.0'");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -1401,10 +1608,13 @@ class GradleInserterTest {
                     "    implementation 'new:lib:1.0'\n" +
                     "}\n";
 
-            // With empty original, dependencies block should be added at the start (semantic position)
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'new:lib:1.0'\n" +
+                    "}\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("dependencies {");
-            assertThat(result).contains("implementation 'new:lib:1.0'");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -1917,9 +2127,17 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation(\"com.example:lib:${libVersion}\") {\n" +
+                    "        exclude group: 'unwanted1'\n" +
+                    "    \n" +
+                    "        exclude group: 'unwanted2', module: 'mod'\n" +
+                    "    }\n" +
+                    "}\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("exclude group: 'unwanted1'");
-            assertThat(result).contains("exclude group: 'unwanted2', module: 'mod'");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -2009,10 +2227,18 @@ class GradleInserterTest {
                     "    implementation 'com.example:lib:1.0'\n" +
                     "}\n";
 
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n" +
+                    "\n";
+
             String result = inserter.insert(original, snippet);
-            // Should have blank line between plugins and dependencies
-            assertThat(result).doesNotContain("}\n\n\ndependencies {");
-            assertThat(result).contains("}\n\ndependencies {");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -2028,8 +2254,18 @@ class GradleInserterTest {
                     "    mavenCentral()\n" +
                     "}\n";
 
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n" +
+                    "\n";
+
             String result = inserter.insert(original, snippet);
-            assertThat(result).contains("}\n\nrepositories {");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -2050,11 +2286,19 @@ class GradleInserterTest {
                     "    implementation 'com.example:lib:1.0'\n" +
                     "}\n";
 
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n" +
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n";
+
             String result = inserter.insert(original, snippet);
-            // Blocks should be separated
-            assertThat(result).doesNotContain("}plugins");
-            assertThat(result).doesNotContain("}repositories");
-            assertThat(result).doesNotContain("}dependencies");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -2069,9 +2313,17 @@ class GradleInserterTest {
                     "group = 'com.example'\n" +
                     "version = '1.0.0'\n";
 
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "group = 'com.example'\n" +
+                    "\n" +
+                    "version = '1.0.0'\n";
+
             String result = inserter.insert(original, snippet);
-            // Properties should be separated from plugins block
-            assertThat(result).doesNotContain("}group");
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -2091,9 +2343,22 @@ class GradleInserterTest {
                     "    implementation 'com.example:lib:1.0'\n" +
                     "}\n";
 
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "repositories {\n" +
+                    "    mavenCentral()\n" +
+                    "}\n" +
+                    "\n" +
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0'\n" +
+                    "}\n" +
+                    "\n";
+
             String result = inserter.insert(original, snippet);
-            // Should not have more than 2 consecutive newlines
-            assertThat(result).doesNotContain("\n\n\n");
+            assertThat(result).isEqualTo(expected);
         }
     }
 
@@ -2303,12 +2568,16 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
-            String result = inserter.insert(original, snippet);
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'existing:lib:1.0'\n" +
+                    "    implementation('new:lib:2.0') {\n" +
+                    "        exclude group: 'unwanted'\n" +
+                    "    }\n" +
+                    "}\n";
 
-            // Check that excludes are properly indented (8 spaces = 2 levels)
-            assertThat(result).contains("    implementation('new:lib:2.0') {");
-            assertThat(result).contains("        exclude group: 'unwanted'");
-            assertThat(result).contains("    }");
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -2326,16 +2595,15 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
-            String result = inserter.insert(original, snippet);
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0' {\n" +
+                    "        exclude group: 'unwanted', module: 'mod'\n" +
+                    "    }\n" +
+                    "}\n";
 
-            // The exclude should be added with proper indentation
-            String[] lines = result.split("\n");
-            for (String line : lines) {
-                if (line.contains("exclude group:")) {
-                    // Should have 8 spaces (2 levels of indentation)
-                    assertThat(line).startsWith("        ");
-                }
-            }
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -2355,18 +2623,17 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
-            String result = inserter.insert(original, snippet);
+            String expected =
+                    "dependencies {\n" +
+                    "    implementation 'com.example:lib:1.0' {\n" +
+                    "        exclude group: 'unwanted1'\n" +
+                    "        exclude group: 'unwanted2', module: 'mod2'\n" +
+                    "        exclude module: 'unwanted3'\n" +
+                    "    }\n" +
+                    "}\n";
 
-            String[] lines = result.split("\n");
-            int excludeCount = 0;
-            for (String line : lines) {
-                if (line.contains("exclude ")) {
-                    excludeCount++;
-                    // Each exclude should have 8 spaces
-                    assertThat(line).startsWith("        ");
-                }
-            }
-            assertThat(excludeCount).isEqualTo(3);
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
         }
 
         @Test
@@ -2384,12 +2651,20 @@ class GradleInserterTest {
                     "    }\n" +
                     "}\n";
 
-            String result = inserter.insert(original, snippet);
+            String expected =
+                    "plugins {\n" +
+                    "    id 'java'\n" +
+                    "}\n" +
+                    "\n" +
+                    "dependencies {\n" +
+                    "    implementation('com.example:lib:1.0') {\n" +
+                    "        exclude group: 'unwanted'\n" +
+                    "    }\n" +
+                    "}\n" +
+                    "\n";
 
-            assertThat(result).contains("dependencies {");
-            assertThat(result).contains("    implementation('com.example:lib:1.0') {");
-            assertThat(result).contains("        exclude group: 'unwanted'");
-            assertThat(result).contains("    }");
+            String result = inserter.insert(original, snippet);
+            assertThat(result).isEqualTo(expected);
         }
     }
 }

@@ -221,42 +221,46 @@ public class ASTArgumentParser {
      * Parse map-style notation and extract a specific key's value.
      * Example: "group: 'x', name: 'y', version: '1.0'" -> extractMapKey(..., "version") -> "1.0"
      *
+     * For complex versions like '31.1-jre', we extract from source text because Groovy AST
+     * may interpret them as expressions (e.g., 31.1 - jre).
+     *
      * @param source the map-style source string
      * @param key the key to extract
      * @return the value for the key, or empty string if not found
      */
     @NotNull
     public static String extractMapKey(@NotNull String source, @NotNull String key) {
+        // First, try to extract from source text directly
+        // This handles cases like version: '31.1-jre' which AST interprets as subtraction
+        String textResult = extractMapKeyFromText(source, key);
+        // System.err.println("DEBUG extractMapKey: key=" + key + ", textResult='" + textResult + "'");
+        if (!textResult.isEmpty()) {
+            return textResult;
+        }
+
+        // Fallback to AST parsing for complex cases (GString interpolation, etc.)
         try {
             // Wrap as method call to parse named arguments
             String wrapped = "dummy(" + source + ")";
+            // System.err.println("DEBUG: wrapped=" + wrapped);
             Expression expr = parseExpression(wrapped);
+            // System.err.println("DEBUG: expr class=" + (expr != null ? expr.getClass().getName() : "null"));
 
             if (expr instanceof MethodCallExpression) {
                 MethodCallExpression mce = (MethodCallExpression) expr;
                 Expression args = mce.getArguments();
 
-                // System.err.println("DEBUG: args class = " + (args != null ? args.getClass().getName() : "null"));
-
                 if (args instanceof ArgumentListExpression) {
                     ArgumentListExpression argList = (ArgumentListExpression) args;
-                    // System.err.println("DEBUG: argList size = " + argList.getExpressions().size());
 
                     for (Expression arg : argList.getExpressions()) {
-                        // System.err.println("DEBUG: arg class = " + arg.getClass().getName());
-
                         // Handle MapExpression (named arguments become MapExpression)
                         if (arg instanceof MapExpression) {
                             MapExpression mapExpr = (MapExpression) arg;
                             for (MapEntryExpression entry : mapExpr.getMapEntryExpressions()) {
                                 String entryKey = entry.getKeyExpression().getText();
                                 if (key.equals(entryKey)) {
-                                    Expression valueExpr = entry.getValueExpression();
-                                    if (valueExpr instanceof ConstantExpression) {
-                                        Object value = ((ConstantExpression) valueExpr).getValue();
-                                        return value != null ? value.toString() : "";
-                                    }
-                                    return valueExpr.getText();
+                                    return extractValueFromExpression(entry.getValueExpression());
                                 }
                             }
                         }
@@ -266,12 +270,7 @@ public class ASTArgumentParser {
                             for (MapEntryExpression entry : namedArgs.getMapEntryExpressions()) {
                                 String entryKey = entry.getKeyExpression().getText();
                                 if (key.equals(entryKey)) {
-                                    Expression valueExpr = entry.getValueExpression();
-                                    if (valueExpr instanceof ConstantExpression) {
-                                        Object value = ((ConstantExpression) valueExpr).getValue();
-                                        return value != null ? value.toString() : "";
-                                    }
-                                    return valueExpr.getText();
+                                    return extractValueFromExpression(entry.getValueExpression());
                                 }
                             }
                         }
@@ -285,12 +284,7 @@ public class ASTArgumentParser {
                             for (MapEntryExpression entry : mapExpr.getMapEntryExpressions()) {
                                 String entryKey = entry.getKeyExpression().getText();
                                 if (key.equals(entryKey)) {
-                                    Expression valueExpr = entry.getValueExpression();
-                                    if (valueExpr instanceof ConstantExpression) {
-                                        Object value = ((ConstantExpression) valueExpr).getValue();
-                                        return value != null ? value.toString() : "";
-                                    }
-                                    return valueExpr.getText();
+                                    return extractValueFromExpression(entry.getValueExpression());
                                 }
                             }
                         }
@@ -299,10 +293,139 @@ public class ASTArgumentParser {
             }
         } catch (Exception e) {
             // Parsing failed
-            // System.err.println("DEBUG: Exception: " + e.getMessage());
         }
 
         return "";
+    }
+
+    /**
+     * Extract map value from source text by finding the key and its quoted value.
+     * Handles single quotes, double quotes, and GString expressions.
+     */
+    @NotNull
+    private static String extractMapKeyFromText(@NotNull String source, @NotNull String key) {
+        // Look for "key:" or "key :" pattern
+        String pattern = key + "\\s*:\\s*";
+        int keyIndex = source.indexOf(key + ":");
+        if (keyIndex < 0) {
+            keyIndex = source.indexOf(key + " :");
+        }
+        if (keyIndex < 0) {
+            return "";
+        }
+
+        // Find where the value starts (after the colon)
+        int colonIndex = source.indexOf(':', keyIndex);
+        if (colonIndex < 0) {
+            return "";
+        }
+
+        int pos = colonIndex + 1;
+        // Skip whitespace
+        while (pos < source.length() && Character.isWhitespace(source.charAt(pos))) {
+            pos++;
+        }
+
+        if (pos >= source.length()) {
+            return "";
+        }
+
+        char firstChar = source.charAt(pos);
+
+        // Handle quoted strings (single or double quotes)
+        if (firstChar == '\'' || firstChar == '"') {
+            return extractQuotedString(source, pos);
+        }
+
+        // Handle GString or property reference starting with $
+        if (firstChar == '$') {
+            return extractDollarExpression(source, pos);
+        }
+
+        // For other cases, let AST handle it
+        return "";
+    }
+
+    /**
+     * Extract a quoted string from source starting at quotePos.
+     * Handles escape sequences.
+     */
+    @NotNull
+    private static String extractQuotedString(@NotNull String source, int quotePos) {
+        char quote = source.charAt(quotePos);
+        int end = quotePos + 1;
+        while (end < source.length()) {
+            char c = source.charAt(end);
+            if (c == quote) {
+                // Found closing quote
+                return source.substring(quotePos + 1, end);
+            }
+            if (c == '\\' && end + 1 < source.length()) {
+                // Skip escaped character
+                end += 2;
+            } else {
+                end++;
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Extract a dollar expression (${...} or $var) from source starting at dollarPos.
+     */
+    @NotNull
+    private static String extractDollarExpression(@NotNull String source, int dollarPos) {
+        int pos = dollarPos + 1;
+        if (pos < source.length() && source.charAt(pos) == '{') {
+            // ${...} format - find matching closing brace
+            int braceDepth = 1;
+            pos++;
+            while (pos < source.length() && braceDepth > 0) {
+                char c = source.charAt(pos);
+                if (c == '{') {
+                    braceDepth++;
+                } else if (c == '}') {
+                    braceDepth--;
+                }
+                pos++;
+            }
+            return source.substring(dollarPos, pos);
+        } else {
+            // $var format
+            while (pos < source.length()) {
+                char c = source.charAt(pos);
+                if (Character.isLetterOrDigit(c) || c == '_') {
+                    pos++;
+                } else {
+                    break;
+                }
+            }
+            return source.substring(dollarPos, pos);
+        }
+    }
+
+    /**
+     * Extract value from an AST expression node.
+     * For ConstantExpression, returns the constant value.
+     * For GStringExpression, reconstructs the GString with ${} syntax.
+     * For other expressions, returns the text representation.
+     */
+    @NotNull
+    private static String extractValueFromExpression(@NotNull Expression valueExpr) {
+        if (valueExpr instanceof ConstantExpression) {
+            Object value = ((ConstantExpression) valueExpr).getValue();
+            return value != null ? value.toString() : "";
+        }
+
+        if (valueExpr instanceof GStringExpression) {
+            // Reconstruct GString properly
+            GStringExpression gstring = (GStringExpression) valueExpr;
+            List<ArgumentValue.GStringPart> parts = parseGString(gstring);
+            return reconstructGString(parts);
+        }
+
+        // For other expressions, return text representation
+        return valueExpr.getText();
     }
 
     /**

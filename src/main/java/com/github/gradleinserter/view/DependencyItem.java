@@ -360,6 +360,9 @@ public final class DependencyItem {
      * Get the original source text for this dependency, preserving the exact notation style.
      * Useful when adding a dependency from a snippet - preserves map notation, quotes, etc.
      *
+     * For map notation with complex versions (e.g., '31.1-jre'), we reconstruct the map notation
+     * with correctly extracted values to avoid AST misinterpretation.
+     *
      * @return the original source text, or a reconstructed string if source is not available
      */
     @NotNull
@@ -367,11 +370,39 @@ public final class DependencyItem {
         if (sourceNode != null) {
             String sourceText = sourceNode.getSourceText();
             if (sourceText != null && !sourceText.isEmpty()) {
+                // Check if this is map notation - if so, reconstruct it with parsed values
+                // to avoid AST misinterpretation of versions like '31.1-jre' as expressions
+                if (isMapNotation(sourceText)) {
+                    return reconstructMapNotation();
+                }
                 return sourceText;
             }
         }
         // Fallback to reconstructed string
         return configuration + " '" + getFullCoordinate() + "'";
+    }
+
+    /**
+     * Check if the source text uses map notation (contains "group:" and "name:")
+     */
+    private boolean isMapNotation(@NotNull String sourceText) {
+        return sourceText.contains("group:") && sourceText.contains("name:");
+    }
+
+    /**
+     * Reconstruct map notation from parsed fields.
+     * This preserves map notation style while using correctly extracted values.
+     */
+    @NotNull
+    private String reconstructMapNotation() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(configuration);
+        sb.append(" group: '").append(group).append("'");
+        sb.append(", name: '").append(name).append("'");
+        if (version != null && !version.isEmpty()) {
+            sb.append(", version: '").append(version).append("'");
+        }
+        return sb.toString();
     }
 
     /**

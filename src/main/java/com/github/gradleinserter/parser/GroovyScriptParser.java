@@ -347,7 +347,7 @@ public class GroovyScriptParser implements ScriptParser {
             MapEntryExpression entry = entries.get(i);
             sb.append(entry.getKeyExpression().getText())
                     .append(": ")
-                    .append(extractArgumentValue(entry.getValueExpression()));
+                    .append(extractMapEntryValue(entry.getValueExpression()));
         }
         return sb.toString();
     }
@@ -360,9 +360,26 @@ public class GroovyScriptParser implements ScriptParser {
             MapEntryExpression entry = entries.get(i);
             sb.append(entry.getKeyExpression().getText())
                     .append(": ")
-                    .append(extractArgumentValue(entry.getValueExpression()));
+                    .append(extractMapEntryValue(entry.getValueExpression()));
         }
         return sb.toString();
+    }
+
+    /**
+     * Extract value from map entry, preserving quotes for string constants.
+     * This is needed so the reconstructed map notation can be reparsed correctly.
+     */
+    private String extractMapEntryValue(Expression expr) {
+        if (expr instanceof ConstantExpression) {
+            Object value = ((ConstantExpression) expr).getValue();
+            if (value instanceof String) {
+                // Preserve quotes around string values
+                return "'" + value.toString() + "'";
+            }
+            return value != null ? value.toString() : "";
+        }
+        // For other expressions, use the normal extraction
+        return extractArgumentValue(expr);
     }
 
     private String extractPropertyName(Expression expr) {
